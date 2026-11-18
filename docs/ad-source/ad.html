@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>PickleLive ad</title>
+<style>
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url(/assets/barlow-condensed-latin-700-normal-B9NQhHK3.woff2) format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 800; src: url(/assets/barlow-condensed-latin-800-normal-jAD-BpyZ.woff2) format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 100 900; src: url(/assets/inter-latin-wght-normal-C2S99t-D.woff2) format("woff2"); }
+:root { --lime: #C6FF00; --live: #FF3B5C; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #040406; color: #fff; font-family: Inter, system-ui, sans-serif; }
+.display { font-family: "Barlow Condensed", Inter, sans-serif; text-transform: uppercase; letter-spacing: .01em; }
+.scene { position: absolute; inset: 0; opacity: 0; transform: scale(1.03); transition: opacity .7s cubic-bezier(.16,1,.3,1), transform 1.2s cubic-bezier(.16,1,.3,1); pointer-events: none; }
+.scene.on { opacity: 1; transform: scale(1); }
+.bg { position: absolute; inset: 0; background:
+  radial-gradient(1200px 600px at 20% 10%, rgba(198,255,0,.10), transparent 60%),
+  radial-gradient(900px 700px at 85% 90%, rgba(255,59,92,.10), transparent 60%),
+  radial-gradient(1400px 900px at 50% 120%, rgba(59,130,246,.12), transparent 60%), #050507; }
+.grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 80px 80px; mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%); }
+/* kicker */
+.kicker { position: absolute; left: 96px; top: 80px; display: flex; align-items: center; gap: 16px; }
+.kicker .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 24px var(--lime); }
+.kicker span { font-family: "Barlow Condensed"; font-weight: 700; font-size: 30px; letter-spacing: .22em; text-transform: uppercase; color: rgba(255,255,255,.8); }
+.kicker b { color: var(--lime); font-weight: 800; }
+/* devices */
+.frame { position: absolute; overflow: hidden; background: #000; }
+.frame iframe { border: 0; transform-origin: 0 0; position: absolute; left: 0; top: 0; background: #050507; }
+.tv { left: 300px; top: 150px; width: 1320px; height: 742.5px; border-radius: 14px; box-shadow: 0 0 0 14px #0c0c0f, 0 0 0 16px #222, 0 60px 120px -20px rgba(0,0,0,.9), 0 0 140px -30px rgba(198,255,0,.35); }
+.tv-stand { position: absolute; left: 860px; top: 905px; width: 200px; height: 46px; background: linear-gradient(#1a1a1f, #0b0b0e); clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%); }
+.tv-shelf { position: absolute; left: 520px; top: 948px; width: 880px; height: 12px; border-radius: 6px; background: linear-gradient(90deg, transparent, #2a2a30, transparent); }
+.venue { position: absolute; inset: 0; background:
+  linear-gradient(180deg, #07070a 0%, #0c0e14 62%, #101521 100%); }
+.venue::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 160px; background: repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 2px, transparent 2px 160px), linear-gradient(180deg, #13203a, #0a1222); opacity: .9; }
+.light { position: absolute; width: 380px; height: 380px; border-radius: 50%; filter: blur(70px); opacity: .35; }
+.phone { border-radius: 54px; box-shadow: 0 0 0 12px #0d0d10, 0 0 0 14px #2a2a30, 0 50px 100px -20px rgba(0,0,0,.95); }
+.phone::after { content: ""; position: absolute; top: 12px; left: 50%; width: 120px; height: 32px; margin-left: -60px; border-radius: 20px; background: #000; z-index: 5; }
+.tablet { border-radius: 34px; box-shadow: 0 0 0 16px #0d0d10, 0 0 0 18px #2a2a30, 0 50px 100px -20px rgba(0,0,0,.95); }
+.laptop { border-radius: 14px 14px 0 0; box-shadow: 0 0 0 14px #0d0d10, 0 0 0 16px #2a2a30; }
+.laptop-base { position: absolute; height: 26px; border-radius: 0 0 26px 26px; background: linear-gradient(#2c2c33, #141418); box-shadow: 0 30px 60px -10px rgba(0,0,0,.9); }
+/* captions */
+#cap { position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); max-width: 1500px; padding: 18px 34px; border-radius: 18px; background: rgba(0,0,0,.72); backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); font-size: 40px; font-weight: 700; line-height: 1.2; text-align: center; opacity: 0; transition: opacity .25s; z-index: 50; }
+#cap.on { opacity: 1; }
+#cap em { font-style: normal; color: var(--lime); }
+/* intro / outro */
+.center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+.big { font-family: "Barlow Condensed"; font-weight: 800; font-size: 150px; line-height: .9; text-transform: uppercase; }
+.line { opacity: 0; transform: translateY(30px); transition: all .7s cubic-bezier(.16,1,.3,1); }
+.line.on { opacity: 1; transform: none; }
+.logo { display: inline-flex; align-items: center; gap: 30px; }
+.ball { width: 150px; height: 150px; border-radius: 50%; background: var(--lime); position: relative; box-shadow: 0 0 80px rgba(198,255,0,.5); }
+.ball i { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: #0A0A0B; }
+.word { font-family: "Barlow Condensed"; font-weight: 800; font-size: 190px; letter-spacing: -.01em; }
+.word b { color: var(--lime); }
+.tag { margin-top: 26px; font-size: 44px; color: rgba(255,255,255,.85); font-weight: 600; }
+.cta { margin-top: 44px; display: inline-block; padding: 20px 40px; border-radius: 999px; background: var(--lime); color: #000; font-family: "Barlow Condensed"; font-weight: 800; font-size: 46px; letter-spacing: .04em; text-transform: uppercase; }
+.url { margin-top: 22px; font-size: 32px; color: rgba(255,255,255,.7); letter-spacing: .02em; }
+.chip { position: absolute; padding: 12px 22px; border-radius: 999px; background: rgba(10,10,14,.85); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 20px 40px -10px rgba(0,0,0,.8); font-family: "Barlow Condensed"; font-weight: 700; font-size: 28px; letter-spacing: .12em; text-transform: uppercase; display: flex; align-items: center; gap: 12px; }
+.chip .p { width: 12px; height: 12px; border-radius: 50%; background: var(--live); box-shadow: 0 0 14px var(--live); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+</style>
+</head>
+<body>
+<div class="bg"></div><div class="grid"></div>
+
+<!-- 1. intro -->
+<section class="scene" id="s-intro">
+  <div class="center"><div>
+    <div class="big line" id="i1">Running a team<br/>pickleball tournament?</div>
+    <div class="big line" id="i2" style="color:var(--lime);margin-top:30px;font-size:120px">Make every point count.</div>
+  </div></div>
+</section>
+<section class="scene" id="s-logo">
+  <div class="center"><div>
+    <div class="logo line" id="l1"><div class="ball"><i style="left:38px;top:36px"></i><i style="left:90px;top:36px"></i><i style="left:64px;top:64px"></i><i style="left:38px;top:92px"></i><i style="left:90px;top:92px"></i></div><div class="word">Pickle<b>Live</b></div></div>
+  </div></div>
+</section>
+
+<!-- 2. TV -->
+<section class="scene" id="s-tv">
+  <div class="venue"></div>
+  <div class="light" style="left:120px;top:120px;background:#C6FF00"></div>
+  <div class="light" style="right:120px;top:200px;background:#3B82F6"></div>
+  <div class="frame tv"><iframe id="f-tv" width="1920" height="1080" style="transform:scale(.6875)"></iframe></div>
+  <div class="tv-stand"></div><div class="tv-shelf"></div>
+  <div class="kicker"><div class="dot"></div><span><b>Big-screen</b> TV mode</span></div>
+  <div class="chip" style="right:96px;top:80px"><span class="p"></span> Live at the venue</div>
+</section>
+
+<!-- 3. Referee -->
+<section class="scene" id="s-ref">
+  <div class="frame phone" style="left:760px;top:84px;width:400px;height:866px"><iframe id="f-ref" width="412" height="892" style="transform:scale(.9709)"></iframe></div>
+  <div class="kicker"><div class="dot"></div><span><b>Referee</b> on any phone</span></div>
+  <div class="chip" style="left:300px;top:420px">Tap who won the rally</div>
+  <div class="chip" style="right:240px;top:300px">Serve order · side outs</div>
+  <div class="chip" style="right:300px;top:560px">Score call: auto</div>
+</section>
+
+<!-- 4. Devices -->
+<section class="scene" id="s-dev">
+  <div class="frame laptop" style="left:150px;top:220px;width:1000px;height:625px"><iframe id="f-lap" width="1440" height="900" style="transform:scale(.6944)"></iframe></div>
+  <div class="laptop-base" style="left:90px;top:845px;width:1120px"></div>
+  <div class="frame tablet" style="left:1210px;top:170px;width:470px;height:660px"><iframe id="f-tab" width="820" height="1152" style="transform:scale(.5732)"></iframe></div>
+  <div class="frame phone" style="left:1560px;top:470px;width:250px;height:540px"><iframe id="f-pho" width="390" height="843" style="transform:scale(.641)"></iframe></div>
+  <div class="kicker"><div class="dot"></div><span><b>Every screen</b> · one link</span></div>
+</section>
+
+<!-- 5. Admin -->
+<section class="scene" id="s-adm">
+  <div class="frame laptop" style="left:260px;top:150px;width:1400px;height:787.5px"><iframe id="f-adm" width="1600" height="900" style="transform:scale(.875)"></iframe></div>
+  <div class="laptop-base" style="left:190px;top:937px;width:1540px"></div>
+  <div class="kicker"><div class="dot"></div><span><b>Organiser</b> console</span></div>
+</section>
+
+<!-- 6. outro -->
+<section class="scene" id="s-out">
+  <div class="center"><div>
+    <div class="logo line" id="o1"><div class="ball"><i style="left:38px;top:36px"></i><i style="left:90px;top:36px"></i><i style="left:64px;top:64px"></i><i style="left:38px;top:92px"></i><i style="left:90px;top:92px"></i></div><div class="word">Pickle<b>Live</b></div></div>
+    <div class="tag line" id="o2">Live team pickleball, point by point.</div>
+    <div class="line" id="o3"><span class="cta">Bring it to your next tournament</span></div>
+    <div class="url line" id="o4">picklelive-qjlt.onrender.com</div>
+  </div></div>
+</section>
+
+<div id="cap"></div>
+
+<script src="/ad.js"></script>
+</body>
+</html>
