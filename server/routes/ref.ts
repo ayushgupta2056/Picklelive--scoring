@@ -7,7 +7,7 @@ import { appendEvent, audit } from "../services/matchService";
 import { saveLineup, setLineupLock, tieLineups } from "../services/lineupService";
 import { matchSummary, pubCategory, pubPlayer, pubTeam, pubTournament, stateOf, tieSummary } from "../services/serialize";
 import type { RefBundle } from "@shared/api";
-import type { MatchConfig } from "@shared/scoring/types";
+import type { EngineEvent, MatchConfig } from "@shared/scoring/types";
 import { getAdmin } from "../auth";
 
 export const refRouter = Router();
@@ -33,7 +33,7 @@ async function refAuth(req: Request, res: Response, next: NextFunction) {
 export async function buildRefBundle(matchId: string): Promise<RefBundle> {
   const m = await prisma.match.findUnique({
     where: { id: matchId },
-    include: { lineups: true, category: true, tie: { include: { template: true, matches: { include: { lineups: true } }, teamA: true, teamB: true } }, tournament: true },
+    include: { events: { orderBy: { seq: "asc" } }, lineups: true, category: true, tie: { include: { template: true, matches: { include: { lineups: true } }, teamA: true, teamB: true } }, tournament: true },
   });
   if (!m) throw notFound("Match not found");
   const teamIds = [m.tie.teamAId, m.tie.teamBId].filter(Boolean) as string[];
@@ -50,6 +50,8 @@ export async function buildRefBundle(matchId: string): Promise<RefBundle> {
     teamB: m.tie.teamB ? pubTeam(m.tie.teamB) : null,
     players: players.map((p) => pubPlayer(p, m.tournament.ageCutoffDate)),
     lineups: lineups.slots[0],
+    events: m.events.map((e) => ({ type: e.type, payload: e.payload, at: e.createdAt.toISOString() }) as EngineEvent),
+    refSubmitted: m.refSubmitted,
   };
 }
 

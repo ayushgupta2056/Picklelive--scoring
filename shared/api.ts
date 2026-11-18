@@ -1,5 +1,5 @@
 /** DTOs shared between server and client. */
-import type { MatchState, MatchConfig, Side } from "./scoring/types";
+import type { MatchState, MatchConfig, Side, EngineEvent } from "./scoring/types";
 import type { StandingRow, Tiebreak } from "./tournament/standings";
 
 export type MatchStatus = "SCHEDULED" | "LINEUP" | "LIVE" | "PAUSED" | "FINISHED" | "WALKOVER" | "RETIRED" | "NOT_REQUIRED";
@@ -226,6 +226,9 @@ export interface RefBundle {
   teamB: PublicTeam | null;
   players: PublicPlayer[];
   lineups: SlotLineupInfo;
+  /** Full event log (including UNDOs) so the client can replay optimistically with the same engine. */
+  events: EngineEvent[];
+  refSubmitted: boolean;
 }
 
 /** Socket.IO server -> client event names. */
