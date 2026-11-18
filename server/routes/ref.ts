@@ -4,7 +4,9 @@ import { ah, HttpError, notFound } from "../errors";
 import { tokenMatches } from "../tokens";
 import { incomingEventSchema, lineupSchema } from "../validation";
 import { appendEvent, audit } from "../services/matchService";
-import { saveLineup, setLineupLock, tieLineups } from "../services/lineupService";
+import { broadcastMatch, saveLineup, setLineupLock, tieLineups } from "../services/lineupService";
+import { emitInvalidate } from "../realtime";
+import { z } from "zod";
 import { matchSummary, pubCategory, pubPlayer, pubTeam, pubTournament, stateOf, tieSummary } from "../services/serialize";
 import type { RefBundle } from "@shared/api";
 import type { EngineEvent, MatchConfig } from "@shared/scoring/types";
@@ -64,6 +66,19 @@ refRouter.put("/:matchId/lineup", refAuth, ah(async (req, res) => {
   const body = lineupSchema.parse(req.body);
   const v = await saveLineup(String(req.params.matchId), body, res.locals.actor, !!res.locals.isAdmin);
   res.json({ ok: true, validation: v });
+}));
+
+/** The referee can set the court the match is played on (from the tournament's court list). */
+refRouter.put("/:matchId/court", refAuth, ah(async (req, res) => {
+  const id = String(req.params.matchId);
+  const { court } = z.object({ court: z.string().min(1).max(40) }).parse(req.body);
+  const m = await prisma.match.findUniqueOrThrow({ where: { id }, include: { tournament: true } });
+  if (!m.tournament.courtNames.includes(court)) throw new HttpError(400, "Unknown court");
+  await prisma.match.update({ where: { id }, data: { court } });
+  await audit(res.locals.actor, "match.court", "Match", id, { from: m.court, to: court }, m.tournamentId);
+  await broadcastMatch(id);
+  emitInvalidate(m.tournamentId, "schedule");
+  res.json({ ok: true });
 }));
 
 refRouter.post("/:matchId/lineups/lock", refAuth, ah(async (req, res) => {

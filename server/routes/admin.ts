@@ -62,7 +62,7 @@ adminRouter.post("/tournaments", ah(async (req, res) => {
       startDate: date(rest.startDate),
       endDate: date(rest.endDate),
       ageCutoffDate: date(rest.ageCutoffDate)!,
-      settings: { ...DEFAULT_SETTINGS, ...(settings ?? {}) },
+      settings: { ...DEFAULT_SETTINGS, ...(settings ?? {}) } as unknown as Prisma.InputJsonValue,
     },
   });
   if (withPresets) {
@@ -113,7 +113,7 @@ adminRouter.patch("/tournaments/:tid", ah(async (req, res) => {
       startDate: date(rest.startDate),
       endDate: date(rest.endDate),
       ageCutoffDate: rest.ageCutoffDate ? date(rest.ageCutoffDate)! : undefined,
-      settings: settings ? { ...settingsOf(cur), ...settings } : undefined,
+      settings: settings ? ({ ...settingsOf(cur), ...settings } as unknown as Prisma.InputJsonValue) : undefined,
     },
   });
   await audit(actor(res), "tournament.update", "Tournament", id, body as Record<string, unknown>, id);

@@ -8,7 +8,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { CourtDiagram } from "@/components/match/CourtDiagram";
-import { LineupPicker, slotSize } from "@/components/match/LineupPicker";
+import { slotSize } from "@/components/match/LineupPicker";
+import { LineupSelects } from "@/components/match/LineupSelects";
+import { NativeSelect } from "@/components/ui/input";
 import { AnimatedNumber, CategoryBadge, TeamChip } from "@/components/match/bits";
 import { api, errorMessage } from "@/lib/api";
 import { beep, useWakeLock, vibrate } from "@/lib/feedback";
@@ -145,6 +147,7 @@ function Wizard({ r, b }: { r: R; b: RefBundle }) {
       <div className="space-y-4 p-4">
         {step === 0 && (
           <>
+            <CourtSelect r={r} b={b} />
             {[lineupA, lineupB].map((l) => l && <RefLineup key={l.side} r={r} b={b} side={l.side} />)}
             <Button size="lg" className="h-16 w-full text-lg" disabled={!bothIn} onClick={async () => {
               try {
@@ -228,6 +231,30 @@ function Wizard({ r, b }: { r: R; b: RefBundle }) {
   );
 }
 
+function CourtSelect({ r, b }: { r: R; b: RefBundle }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <section className="rounded-xl border p-3">
+      <label htmlFor="court" className="mb-2 block font-semibold">Court</label>
+      <NativeSelect id="court" className="h-14 text-base" value={b.match.court ?? ""} disabled={busy} data-testid="court-select" onChange={async (e) => {
+        setBusy(true);
+        try {
+          await api.put(`/api/ref/${b.match.id}/court`, { court: e.target.value }, r.headers);
+          await r.load();
+          toast.success(`Court set to ${e.target.value}`);
+        } catch (err) {
+          toast.error(errorMessage(err));
+        } finally {
+          setBusy(false);
+        }
+      }}>
+        <option value="" disabled>Select court…</option>
+        {b.tournament.courtNames.map((c) => <option key={c} value={c}>{c}</option>)}
+      </NativeSelect>
+    </section>
+  );
+}
+
 function PosBox({ label, name, highlight }: { label: string; name?: string; highlight?: boolean }) {
   return (
     <div className={cn("rounded-lg border p-3 text-center", highlight && "border-lime")}>
@@ -303,9 +330,9 @@ function RefLineup({ r, b, side }: { r: R; b: RefBundle; side: Side }) {
         <p className="flex items-center gap-2 text-base font-bold"><CheckCircle2 className="h-5 w-5 text-lime-accent" /> {names.join(" & ")}</p>
       ) : (
         <>
-          <p className="mb-2 text-sm text-muted-foreground">Pick {need} eligible player{need > 1 ? "s" : ""} from the roster.</p>
-          <LineupPicker roster={info.roster} category={b.category} value={sel} onChange={setSel} big />
-          <Button className="mt-3 w-full" size="lg" disabled={sel.length !== need || busy} onClick={submit}>{busy && <Loader2 className="animate-spin" />} Submit lineup</Button>
+          <p className="mb-2 text-sm text-muted-foreground">Select {need} player{need > 1 ? "s" : ""} from the {team?.code} roster. Ineligible players are greyed out with the reason.</p>
+          <LineupSelects roster={info.roster} category={b.category} value={sel} onChange={setSel} teamCode={team?.code} />
+          <Button className="mt-3 w-full" size="lg" disabled={sel.filter(Boolean).length !== need || busy} onClick={submit}>{busy && <Loader2 className="animate-spin" />} Submit lineup</Button>
         </>
       )}
     </section>

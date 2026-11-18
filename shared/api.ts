@@ -5,7 +5,18 @@ import type { StandingRow, Tiebreak } from "./tournament/standings";
 export type MatchStatus = "SCHEDULED" | "LINEUP" | "LIVE" | "PAUSED" | "FINISHED" | "WALKOVER" | "RETIRED" | "NOT_REQUIRED";
 export type TieStatus = "SCHEDULED" | "IN_PROGRESS" | "DECIDED" | "FINISHED";
 
+/** What the big-screen TV display shows; set by the admin and pushed live to /t/:slug/tv. */
+export interface DisplaySettings {
+  mode: "ALL" | "TEAM" | "TIE" | "ROTATE";
+  teamId?: string | null;
+  tieId?: string | null;
+  /** Seconds per page when rotating. */
+  rotateSeconds?: number;
+  showPhotos?: boolean;
+}
+
 export interface TournamentSettings {
+  display?: DisplaySettings;
   pointsWin: number;
   pointsDraw: number;
   pointsLoss: number;

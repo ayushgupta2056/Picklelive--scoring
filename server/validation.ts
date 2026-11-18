@@ -84,6 +84,13 @@ export const tournamentSchema = z.object({
       restGapMinutes: z.number().int().min(0).max(240),
       soundsEnabled: z.boolean(),
       matchDurationMinutes: z.number().int().min(5).max(240),
+      display: z.object({
+        mode: z.enum(["ALL", "TEAM", "TIE", "ROTATE"]),
+        teamId: z.string().nullable().optional(),
+        tieId: z.string().nullable().optional(),
+        rotateSeconds: z.number().int().min(5).max(120).optional(),
+        showPhotos: z.boolean().optional(),
+      }),
     })
     .partial()
     .optional(),
