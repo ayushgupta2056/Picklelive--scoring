@@ -7,7 +7,16 @@ export default {
   theme: {
     container: { center: true, padding: "1rem", screens: { "2xl": "1400px" } },
     extend: {
-      fontFamily: { sans: ['"Inter Variable"', "Inter", "system-ui", "sans-serif"] },
+      fontFamily: {
+        sans: ['"Inter Variable"', "Inter", "system-ui", "sans-serif"],
+        display: ['"Barlow Condensed"', '"Inter Variable"', "system-ui", "sans-serif"],
+      },
+      boxShadow: {
+        glow: "0 0 0 1px rgba(198,255,0,.35), 0 0 24px -4px rgba(198,255,0,.45)",
+        live: "0 0 0 1px rgba(255,59,92,.45), 0 0 32px -8px rgba(255,59,92,.55)",
+        card: "0 1px 0 0 rgba(255,255,255,.04) inset, 0 8px 24px -12px rgba(0,0,0,.6)",
+      },
+      transitionTimingFunction: { out: "cubic-bezier(.16,1,.3,1)" },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

@@ -27,9 +27,9 @@
     --lime-text: 76 100% 28%;
   }
   .dark {
-    --background: 240 6% 4%;
-    --foreground: 0 0% 96%;
-    --card: 240 5% 8%;
+    --background: 240 10% 2.5%;
+    --foreground: 0 0% 97%;
+    --card: 240 6% 6.5%;
     --card-foreground: 0 0% 96%;
     --popover: 240 5% 9%;
     --popover-foreground: 0 0% 96%;
@@ -43,7 +43,7 @@
     --accent-foreground: 0 0% 96%;
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 4% 18%;
+    --border: 240 5% 15%;
     --input: 240 4% 20%;
     --ring: 76 100% 50%;
     --lime-text: 76 100% 50%;
@@ -53,6 +53,18 @@
   body { @apply bg-background text-foreground antialiased; font-feature-settings: "cv11", "ss01"; }
   .tnum, .score { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
   .text-lime-accent { color: hsl(var(--lime-text)); }
+}
+
+@layer components {
+  /* Broadcast display type: condensed, tight, tabular. Use for scores, team names, section titles. */
+  .font-display { font-family: theme("fontFamily.display"); letter-spacing: -0.005em; }
+  .score-display { font-family: theme("fontFamily.display"); font-weight: 800; font-variant-numeric: tabular-nums; line-height: .9; letter-spacing: -0.01em; }
+  .eyebrow { @apply text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground; }
+  /* Layered surface: subtle top highlight + depth, the base for every card on viewing screens. */
+  .surface { @apply rounded-2xl border bg-card shadow-card; background-image: linear-gradient(180deg, hsl(var(--foreground) / 0.025), transparent 40%); }
+  .surface-live { @apply shadow-live border-live/40; }
+  .hover-lift { @apply transition-[transform,border-color,background-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-foreground/20; }
+  .text-glow { text-shadow: 0 0 18px rgba(198, 255, 0, 0.45); }
 }
 
 @media (prefers-reduced-motion: reduce) {

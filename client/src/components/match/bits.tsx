@@ -4,9 +4,12 @@ import type { MatchStatus, PublicCategory, PublicTeam } from "@shared/api";
 
 export function TeamChip({ team, size = "md", className }: { team?: PublicTeam | null; size?: "sm" | "md" | "lg"; className?: string }) {
   const color = team?.color ?? "#52525B";
-  const s = size === "sm" ? "h-6 min-w-9 text-[11px] px-1.5" : size === "lg" ? "h-10 min-w-14 text-base px-2.5" : "h-7 min-w-11 text-xs px-2";
+  const s = size === "sm" ? "h-6 min-w-9 text-[13px] px-1.5" : size === "lg" ? "h-10 min-w-14 text-xl px-2.5" : "h-7 min-w-11 text-sm px-2";
   return (
-    <span className={cn("inline-flex items-center justify-center rounded-md font-black tracking-wider tnum", s, className)} style={{ background: color, color: contrastText(color) }}>
+    <span
+      className={cn("inline-flex items-center justify-center rounded-md font-display font-bold uppercase tracking-wide tnum shadow-[inset_0_-2px_0_rgba(0,0,0,.18)]", s, className)}
+      style={{ background: color, color: contrastText(color) }}
+    >
       {team?.code ?? "TBD"}
     </span>
   );
@@ -26,7 +29,7 @@ export function CategoryBadge({ category, className, long }: { category?: Public
   if (!category) return null;
   return (
     <span
-      className={cn("inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-black uppercase tracking-wide", className)}
+      className={cn("inline-flex items-center whitespace-nowrap rounded-md px-1.5 py-0.5 font-display text-[12px] font-bold uppercase tracking-wider", className)}
       style={{ background: `${category.color}26`, color: category.color, boxShadow: `inset 0 0 0 1px ${category.color}55` }}
       title={category.name}
     >
@@ -36,7 +39,12 @@ export function CategoryBadge({ category, className, long }: { category?: Public
 }
 
 export function LiveDot({ className }: { className?: string }) {
-  return <span className={cn("inline-block h-2.5 w-2.5 rounded-full bg-live animate-pulse-dot", className)} aria-hidden />;
+  return (
+    <span className={cn("relative inline-flex h-2.5 w-2.5", className)} aria-hidden>
+      <span className="absolute inset-0 rounded-full bg-live opacity-60 motion-safe:animate-ping" />
+      <span className="relative inline-block h-full w-full rounded-full bg-live" />
+    </span>
+  );
 }
 
 const STATUS_LABEL: Record<MatchStatus, string> = {
@@ -54,7 +62,7 @@ export function StatusPill({ status, className }: { status: MatchStatus; classNa
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.12em]",
         live ? "bg-live/15 text-live" : status === "PAUSED" ? "bg-amber-500/15 text-amber-500" : ["FINISHED", "WALKOVER", "RETIRED"].includes(status) ? "bg-secondary text-foreground" : "bg-muted text-muted-foreground",
         className,
       )}
@@ -87,9 +95,9 @@ export function AnimatedNumber({ value, className }: { value: number | string; c
 
 export function EmptyState({ icon, title, children }: { icon?: React.ReactNode; title: string; children?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-10 text-center">
-      {icon && <div className="text-muted-foreground">{icon}</div>}
-      <p className="font-semibold">{title}</p>
+    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-card/40 p-10 text-center">
+      {icon && <div className="grid h-14 w-14 place-items-center rounded-2xl bg-muted text-muted-foreground">{icon}</div>}
+      <p className="font-display text-xl font-bold uppercase tracking-wide">{title}</p>
       {children && <div className="max-w-sm text-sm text-muted-foreground">{children}</div>}
     </div>
   );
