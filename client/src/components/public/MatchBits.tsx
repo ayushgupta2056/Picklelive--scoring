@@ -195,7 +195,7 @@ export function TieCard({ tie, big }: { tie: TieSummary; big?: boolean }) {
   const a = lk.teams.get(tie.teamAId ?? "");
   const bt = lk.teams.get(tie.teamBId ?? "");
   return (
-    <motion.article layout className={cn("surface relative overflow-hidden", live && "surface-live")}>
+    <motion.article layout className={cn("surface relative min-w-0 overflow-hidden", live && "surface-live")}>
       <div className="pointer-events-none absolute inset-0" style={teamWash(a, bt, big ? 0.28 : 0.16)} aria-hidden />
       <div className="relative p-3 sm:p-5">
         <Link to={`${base}/tie/${tie.id}`} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

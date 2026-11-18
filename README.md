@@ -223,6 +223,15 @@ The end-to-end test runs the whole flow:
 
 ---
 
+## Design system
+
+The viewing screens follow an OLED-dark "sports broadcast" style built with the UI/UX Pro Max skill's guidance:
+- **Type:** Barlow Condensed for scores, team names and headings (`font-display`, `score-display`); Inter for body text.
+- **Color:** a single electric-lime accent (#C6FF00) with a restrained glow, and team colors as washes.
+- **Contrast:** at least 4.5:1, and 7:1 on the TV display.
+- **Motion:** 150–300 ms transitions and staggered entrances, all switched off under reduced motion.
+- **Shared utilities** (`surface`, `eyebrow`, `hover-lift`, `text-glow`) live in `client/src/index.css`.
+
 ## Defaults I chose
 
 - Timezone `Asia/Kolkata`; age cutoff Jan 1 of the tournament year.
