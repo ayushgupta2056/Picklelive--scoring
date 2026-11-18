@@ -2,6 +2,10 @@
 
 Real-time pickleball tournament and live scoring for **team-vs-team** events. Every fixture is a **tie** (Team A vs Team B) made of several category matches (U18 Mixed, Men's Doubles, Open Singles…). Admins define everything: categories, tie formats, teams, players, stages and schedule. Referees score from a phone with a secret link. Fans, and a big screen at the venue, follow every point live.
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ayushgupta2056/Picklelive--scoring/tree/ccr-a9246ca8-0jdx7m)
+
+🎬 Silent demo video: [`docs/picklelive-demo.mp4`](docs/picklelive-demo.mp4) (1:53)
+
 One Render web service (Node 20 + Express + Socket.IO, which also serves the React app) plus PostgreSQL.
 
 ---
