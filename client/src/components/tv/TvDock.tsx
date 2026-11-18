@@ -54,6 +54,10 @@ export function TvDock({ b, lk, effective, overridden, forceOpenTab, onSelect, o
   const closeTimer = useRef<number>();
   const idleTimer = useRef<number>();
   const dockRef = useRef<HTMLDivElement>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
+  const forcedRef = useRef(forceOpenTab);
+  forcedRef.current = forceOpenTab;
 
   const wasForced = useRef(false);
   useEffect(() => {
@@ -79,10 +83,16 @@ export function TvDock({ b, lk, effective, overridden, forceOpenTab, onSelect, o
         setHandle(false);
         if (!dockRef.current?.matches(":hover")) document.body.style.cursor = "none";
       }, 3000);
+      // Open/close follows where the pointer really moves (not enter/leave events, which also fire while the
+      // dock slides under a resting pointer): near the bottom edge or over the dock keeps it open; moving up away closes it.
       const nearBottom = e.clientY > window.innerHeight - Math.max(90, window.innerHeight * 0.12);
-      if (nearBottom) {
+      const dockTop = dockRef.current?.getBoundingClientRect().top ?? window.innerHeight;
+      if (nearBottom || (openRef.current && e.clientY >= dockTop - 24)) {
         window.clearTimeout(closeTimer.current);
-        setOpen(true);
+        if (nearBottom) setOpen(true);
+      } else if (openRef.current && !forcedRef.current) {
+        window.clearTimeout(closeTimer.current);
+        closeTimer.current = window.setTimeout(() => setOpen(false), 700);
       }
     };
     const onKey = (e: KeyboardEvent) => {
@@ -158,8 +168,6 @@ export function TvDock({ b, lk, effective, overridden, forceOpenTab, onSelect, o
             animate={reduce ? { opacity: 1 } : { y: 0 }}
             exit={reduce ? { opacity: 0 } : { y: "105%" }}
             transition={{ type: "spring", stiffness: 380, damping: 38 }}
-            onMouseEnter={() => window.clearTimeout(closeTimer.current)}
-            onMouseLeave={scheduleClose}
             className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#07070A] text-white shadow-[0_-24px_60px_-12px_rgba(0,0,0,.9)] backdrop-blur-2xl"
             style={{ cursor: "default" }}
           >
