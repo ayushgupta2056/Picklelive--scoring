@@ -29,7 +29,6 @@ export function useMatchDetail(matchId: string | undefined) {
       s.off(SOCKET.matchState, onState);
       s.off(SOCKET.matchUpdate, onMatch);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId, qc]);
   return q;
 }

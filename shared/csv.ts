@@ -4,7 +4,7 @@ export function parseCsv(text: string): string[][] {
   let row: string[] = [];
   let field = "";
   let q = false;
-  const src = text.replace(/^﻿/, "");
+  const src = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
     if (q) {
