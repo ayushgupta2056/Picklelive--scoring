@@ -31,7 +31,7 @@ export default function DisplayPage() {
   const preview = pagesFor(b, cur);
   return (
     <div>
-      <PageHeader title="Big display" description="Open the TV link on the venue screen once, then switch what it shows from here. It updates instantly.">
+      <PageHeader title="Big display" description="Open the TV link on the venue screen once, then switch what it shows from here; it updates instantly. You can also choose directly on the TV: move the mouse to the bottom edge (or press M) to pick a view, a team or a tie. A choice made on the TV is kept for that screen until you click Follow admin.">
         <Button variant="outline" onClick={() => setQr(true)}><QrCode /> TV link</Button>
         <Button asChild><a href={`/t/${t.slug}/tv`} target="_blank" rel="noreferrer"><ExternalLink /> Open TV screen</a></Button>
       </PageHeader>

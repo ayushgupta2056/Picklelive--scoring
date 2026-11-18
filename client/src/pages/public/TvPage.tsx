@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowLeftRight, Check, Loader2, Maximize, WifiOff } from "lucide-react";
+import { ArrowLeftRight, Check, ChevronDown, Loader2, Maximize, Swords, Users, WifiOff } from "lucide-react";
+import { TvDock, type TvSelection } from "@/components/tv/TvDock";
+import { TeamPanel } from "@/components/tv/TeamPanel";
 import { useBundle, useLookups } from "@/hooks/useBundle";
 import { useSocketStatus } from "@/lib/socket";
 import { cn, contrastText } from "@/lib/utils";
@@ -28,7 +30,7 @@ const DONE = ["FINISHED", "WALKOVER", "RETIRED"];
  */
 export default function TvPage() {
   const { slug = "" } = useParams();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const q = useBundle(slug);
   const lk = useLookups(q.data);
   const online = useSocketStatus();
@@ -43,8 +45,14 @@ export default function TvPage() {
   }, []);
 
   const b = q.data;
+  // What to show: this screen's own choice (kept in the URL so a refresh keeps it) overrides the admin default.
+  const overridden = params.has("mode") || params.has("team") || params.has("tie");
   const display: DisplaySettings = useMemo(() => {
     const base: DisplaySettings = { mode: "ALL", rotateSeconds: 12, showPhotos: true, ...(b?.tournament.settings.display ?? {}) };
+    if (overridden) {
+      base.teamId = null;
+      base.tieId = null;
+    }
     const m = params.get("mode")?.toUpperCase();
     if (m === "ALL" || m === "TEAM" || m === "TIE" || m === "ROTATE") base.mode = m;
     if (params.get("team")) {
@@ -56,7 +64,22 @@ export default function TvPage() {
       base.tieId = params.get("tie");
     }
     return base;
-  }, [b, params]);
+  }, [b, params, overridden]);
+  // A team/tie that doesn't exist (deleted, or ids changed after re-seeding) asks for a choice instead of going blank.
+  const needsPick: "TEAM" | "TIE" | null = !b ? null
+    : display.mode === "TEAM" && !lk.teams.has(display.teamId ?? "") ? "TEAM"
+    : display.mode === "TIE" && !b.ties.some((t) => t.id === display.tieId && t.teamAId && t.teamBId) ? "TIE"
+    : null;
+  const select = (sel: TvSelection) => {
+    const next = new URLSearchParams();
+    if (sel.mode === "TEAM" && sel.teamId) next.set("team", sel.teamId);
+    else if (sel.mode === "TIE" && sel.tieId) next.set("tie", sel.tieId);
+    else next.set("mode", sel.mode.toLowerCase());
+    setParams(next, { replace: true });
+  };
+  const followAdmin = () => setParams(new URLSearchParams(), { replace: true });
+  const teamMode = display.mode === "TEAM" && !needsPick;
+  const focusTeam = teamMode ? lk.teams.get(display.teamId!) : undefined;
 
   const pages = useMemo(() => (b ? pagesFor(b, display) : []), [b, display]);
   const [page, setPage] = useState(0);
@@ -75,7 +98,7 @@ export default function TvPage() {
 
   const current = chunks[page % Math.max(1, chunks.length)] ?? [];
   const maxMatches = Math.max(1, ...current.map((t) => t.matches.filter((m) => m.status !== "NOT_REQUIRED").length));
-  const L = useLayout(current.length, maxMatches);
+  const L = useLayout(current.length, maxMatches, teamMode ? 0.27 : 0);
 
   if (!b) return <div className="grid h-dvh place-items-center bg-[#030304]"><Loader2 className="h-10 w-10 animate-spin text-white" /></div>;
 
@@ -93,8 +116,9 @@ export default function TvPage() {
       <header className="group relative z-10 flex shrink-0 items-center border-b border-white/10 bg-black/60 backdrop-blur" style={{ height: L.headerH, paddingInline: L.pad, gap: L.pad }}>
         <span className="shrink-0 rounded-full" style={{ width: L.u * 1.1, height: L.u * 1.1, background: LIME, boxShadow: `0 0 ${L.u}px ${LIME}88` }} aria-hidden />
         <h1 className="min-w-0 truncate font-display font-bold uppercase tracking-wide" style={{ fontSize: L.u * 2.1, lineHeight: 1 }}>{b.tournament.name}</h1>
-        <span className="shrink-0 rounded-md border border-white/15 bg-white/5 px-[0.6em] py-[0.15em] font-display font-semibold uppercase tracking-[0.18em] text-white/75" style={{ fontSize: L.u * 0.95 }}>
-          {modeLabel(display, lk)}
+        <span className="flex shrink-0 items-center gap-[0.4em] rounded-md border border-white/15 bg-white/5 px-[0.6em] py-[0.15em] font-display font-semibold uppercase tracking-[0.18em] text-white/75" style={{ fontSize: L.u * 0.95 }}>
+          {display.mode === "TEAM" && focusTeam && <span className="h-[0.7em] w-[0.7em] rounded-full" style={{ background: focusTeam.color }} />}
+          {needsPick ? "Choose a view" : modeLabel(display, lk)}
         </span>
         <div className="ml-auto flex shrink-0 items-center" style={{ gap: L.pad }}>
           {!online && (
@@ -124,7 +148,17 @@ export default function TvPage() {
 
       {/* ties */}
       <main className="relative z-0 min-h-0 flex-1" style={{ padding: L.pad }}>
-        {current.length === 0 ? (
+        {needsPick ? (
+          <div className="grid h-full place-items-center text-center">
+            <div className="flex flex-col items-center" style={{ gap: L.u }}>
+              <span className="grid place-items-center rounded-3xl border border-white/10 bg-white/5" style={{ width: L.u * 7, height: L.u * 7 }}>
+                {needsPick === "TEAM" ? <Users style={{ width: L.u * 3.4, height: L.u * 3.4 }} className="text-[#C6FF00]" /> : <Swords style={{ width: L.u * 3.4, height: L.u * 3.4 }} className="text-[#C6FF00]" />}
+              </span>
+              <p className="font-display font-bold uppercase tracking-wide" style={{ fontSize: L.u * 3.6 }}>Select {needsPick === "TEAM" ? "a team" : "a tie"} to display</p>
+              <p className="flex items-center gap-2 text-white/70" style={{ fontSize: L.u * 1.4 }}>Pick one from the panel below <ChevronDown style={{ width: "1.2em", height: "1.2em" }} /></p>
+            </div>
+          </div>
+        ) : current.length === 0 ? (
           <div className="grid h-full place-items-center text-center">
             <div>
               <p className="font-display font-bold uppercase tracking-wide" style={{ fontSize: L.u * 4 }}>No live ties right now</p>
@@ -132,9 +166,10 @@ export default function TvPage() {
             </div>
           </div>
         ) : (
+          <div className={cn("h-full", teamMode && focusTeam && "grid")} style={teamMode ? { gridTemplateColumns: `minmax(0,1fr) ${L.sideW}px`, gap: L.pad } : undefined}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
-              key={`${display.mode}-${page}-${current.map((t) => t.id).join()}`}
+              key={`${display.mode}-${display.teamId ?? ""}-${display.tieId ?? ""}-${page}-${current.map((t) => t.id).join()}`}
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={reduce ? { opacity: 0 } : { opacity: 0, y: -12 }}
@@ -149,10 +184,13 @@ export default function TvPage() {
               ))}
             </motion.div>
           </AnimatePresence>
+          {teamMode && focusTeam && <TeamPanel b={b} lk={lk} team={focusTeam} u={L.u} currentTieIds={current.map((t) => t.id)} />}
+          </div>
         )}
       </main>
 
       <Ticker b={b} lk={lk} L={L} />
+      <TvDock b={b} lk={lk} effective={{ mode: display.mode, teamId: display.teamId, tieId: display.tieId }} overridden={overridden} forceOpenTab={needsPick} onSelect={select} onFollowAdmin={followAdmin} />
     </div>
   );
 }
@@ -170,6 +208,7 @@ interface Layout {
   headH: number;
   rowH: number;
   cardW: number;
+  sideW: number;
   vars: React.CSSProperties;
 }
 
@@ -184,7 +223,7 @@ function useViewport() {
 }
 
 /** Grid shape and every font/box size, derived from viewport, number of ties and matches per tie. */
-function useLayout(n: number, matches: number): Layout {
+function useLayout(n: number, matches: number, sideFrac = 0): Layout {
   const { w, h } = useViewport();
   return useMemo(() => {
     const u = Math.min(w / 100, (h / 100) * 1.7778);
@@ -193,22 +232,26 @@ function useLayout(n: number, matches: number): Layout {
     const tickerH = Math.max(40, u * 3.4);
     const cols = n <= 1 ? 1 : n <= 4 ? 2 : 3;
     const rows = Math.max(1, Math.ceil(n / cols));
-    const cardW = (w - pad * (cols + 1)) / cols;
+    const sideW = sideFrac ? Math.max(300, w * sideFrac) : 0;
+    const cardW = (w - pad * (cols + 1) - (sideW ? sideW + pad : 0)) / cols;
     const cardH = (h - headerH - tickerH - pad * (rows + 1)) / rows;
     // Head takes ~28% of a card (capped so a single tie doesn't get a giant header); match rows share the rest.
     const headH = Math.min(cardH * (rows === 1 ? 0.24 : 0.28), cardW * 0.2);
     const inner = Math.max(4, u * 0.5);
     const rowH = (cardH - headH - inner * (matches + 1)) / matches;
     const vars = { "--tv-u": `${u}px` } as React.CSSProperties;
-    return { u, pad, headerH, tickerH, cols, rows, headH, rowH, cardW, vars };
-  }, [w, h, n, matches]);
+    return { u, pad, headerH, tickerH, cols, rows, headH, rowH, cardW, sideW, vars };
+  }, [w, h, n, matches, sideFrac]);
 }
 
 // ------------------------------------------------------------------ pieces
 
 function modeLabel(d: DisplaySettings, lk: Lk) {
   if (d.mode === "TEAM") return lk.teams.get(d.teamId ?? "")?.name ?? "Team";
-  if (d.mode === "TIE") return "Featured tie";
+  if (d.mode === "TIE") {
+    const t = lk.ties.get(d.tieId ?? "");
+    return t ? `Featured · ${t.roundLabel ?? "Tie"}` : "Featured tie";
+  }
   if (d.mode === "ROTATE") return "Live courts";
   return "Live ties";
 }
