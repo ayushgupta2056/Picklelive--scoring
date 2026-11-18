@@ -119,7 +119,7 @@ function Wizard({ r, b }: { r: R; b: RefBundle }) {
 
   const serving: Side | null = tossChoice === "SERVE" ? tossWinner : tossChoice === "RECEIVE" && tossWinner ? other(tossWinner) : firstServer;
   const team = (s: Side) => (s === "A" ? b.teamA : b.teamB);
-  const steps = ["Lineups", "Coin toss", "Ends", "Positions", "Start"];
+  const steps = ["Lineups & court", "Coin toss", "Sides", "Positions", "Start"];
 
   const start = async () => {
     if (!pos || !serving) return;
@@ -188,7 +188,7 @@ function Wizard({ r, b }: { r: R; b: RefBundle }) {
         )}
         {step === 2 && (
           <>
-            <h2 className="text-lg font-bold">Which team is at YOUR end (nearest you)?</h2>
+            <h2 className="text-lg font-bold">Standing at the net post, which team is on your LEFT?</h2>
             <TwoTeams b={b} value={nearTeam} onChange={(s) => setNearTeam(s)} />
             <Nav onBack={() => setStep(1)} onNext={() => setStep(3)} />
           </>
@@ -218,7 +218,7 @@ function Wizard({ r, b }: { r: R; b: RefBundle }) {
             <h2 className="text-lg font-bold">Ready</h2>
             <ul className="space-y-1 rounded-xl border p-4 text-sm">
               <li><b>{team(serving)?.name}</b> serves first from the right court: <b>{players.get(pos[serving].right)?.name}</b></li>
-              <li><b>{team(nearTeam)?.name}</b> at your end</li>
+              <li><b>{team(nearTeam)?.name}</b> on your left, <b>{team(other(nearTeam))?.name}</b> on your right</li>
               <li>{b.config.scoringType === "RALLY" ? "Rally" : "Side-out"} scoring · games to {b.config.pointsToWin} · best of {b.config.bestOf}</li>
               <li>Opening call: <b className="tnum">{b.config.scoringType === "SIDE_OUT" && b.config.format === "DOUBLES" ? "0-0-2" : "0-0"}</b></li>
             </ul>
@@ -390,6 +390,7 @@ function Live({ r, b, st }: { r: R; b: RefBundle; st: MatchState }) {
   };
 
   const timeoutLeft = st.activeTimeout?.startedAt ? Math.max(0, Math.ceil(st.activeTimeout.seconds - (now - new Date(st.activeTimeout.startedAt).getTime()) / 1000)) : null;
+  // "NEAR" end = the team drawn on the LEFT of the court diagram; its button sits on the left too.
   const nearSide: Side = st.ends.A === "NEAR" ? "A" : "B";
   const farSide = other(nearSide);
   const flags = [...new Set([...st.matchPoint.map((s) => `MATCH POINT ${team(s)?.code}`), ...st.gamePoint.filter((s) => !st.matchPoint.includes(s)).map((s) => `GAME POINT ${team(s)?.code}`)])];
@@ -407,7 +408,7 @@ function Live({ r, b, st }: { r: R; b: RefBundle; st: MatchState }) {
       </div>
 
       <div className="flex flex-1 flex-col gap-3 px-3 landscape:grid landscape:grid-cols-[1fr_1.4fr_1fr] landscape:items-stretch">
-        <RallyButton team={team(farSide)} side={farSide} onClick={() => rally(farSide)} serving={st.servingTeam === farSide} className="hidden landscape:flex" />
+        <RallyButton team={team(nearSide)} side={nearSide} onClick={() => rally(nearSide)} serving={st.servingTeam === nearSide} className="hidden landscape:flex" />
         {/* call + court */}
         <div className="text-center">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Score call</div>
@@ -423,11 +424,11 @@ function Live({ r, b, st }: { r: R; b: RefBundle; st: MatchState }) {
           </div>
           <CourtDiagram state={st} teamA={b.teamA} teamB={b.teamB} players={players} className="mt-3" />
         </div>
-        <RallyButton team={team(nearSide)} side={nearSide} onClick={() => rally(nearSide)} serving={st.servingTeam === nearSide} className="hidden landscape:flex" />
-        {/* portrait: far team left, near team right */}
+        <RallyButton team={team(farSide)} side={farSide} onClick={() => rally(farSide)} serving={st.servingTeam === farSide} className="hidden landscape:flex" />
+        {/* portrait: each team's button sits directly under its column of the court */}
         <div className="grid grid-cols-2 gap-3 landscape:hidden">
-          <RallyButton team={team(farSide)} side={farSide} onClick={() => rally(farSide)} serving={st.servingTeam === farSide} />
           <RallyButton team={team(nearSide)} side={nearSide} onClick={() => rally(nearSide)} serving={st.servingTeam === nearSide} />
+          <RallyButton team={team(farSide)} side={farSide} onClick={() => rally(farSide)} serving={st.servingTeam === farSide} />
         </div>
       </div>
 

@@ -19,16 +19,18 @@ const nameOf = (players: Props["players"], id: string | null) => {
 };
 
 /**
- * Top-down court as seen by the referee: the NEAR team is at the bottom facing the net.
- * The near team's right court is on the referee's right; the far team's right court is on the referee's left.
+ * Top-down court seen from the referee's chair at the net post: the net runs vertically, each team occupies its
+ * own column. The team at the "NEAR" end is drawn on the LEFT, the other team on the RIGHT (matching the rally
+ * buttons below). A team on the left faces right, so its right-hand court is the BOTTOM box; a team on the right
+ * faces left, so its right-hand court is the TOP box.
  */
 export function CourtDiagram({ state, teamA, teamB, players, className, big }: Props) {
-  const nearSide: Side = state.ends.A === "NEAR" ? "A" : "B";
-  const farSide: Side = nearSide === "A" ? "B" : "A";
+  const leftSide: Side = state.ends.A === "NEAR" ? "A" : "B";
+  const rightSide: Side = leftSide === "A" ? "B" : "A";
   const team = (s: Side) => (s === "A" ? teamA : teamB);
   const doubles = state.config.format === "DOUBLES";
 
-  const boxesFor = (side: Side, near: boolean) => {
+  const boxesFor = (side: Side, onLeft: boolean) => {
     const pos = state.positions[side];
     let right: string | null = pos.right;
     let left: string | null = pos.left;
@@ -38,22 +40,22 @@ export function CourtDiagram({ state, teamA, teamB, players, className, big }: P
       right = inRight ? pos.right : null;
       left = inRight ? null : pos.right;
     }
-    // [refLeft, refRight]
-    return near ? [{ id: left, court: "LEFT" }, { id: right, court: "RIGHT" }] : [{ id: right, court: "RIGHT" }, { id: left, court: "LEFT" }];
+    // [top, bottom]
+    return onLeft ? [{ id: left, court: "LEFT" }, { id: right, court: "RIGHT" }] : [{ id: right, court: "RIGHT" }, { id: left, court: "LEFT" }];
   };
 
-  const half = (side: Side, near: boolean) => {
+  const half = (side: Side, onLeft: boolean) => {
     const t = team(side);
     const color = t?.color ?? "#3F3F46";
     const serving = state.servingTeam === side && state.phase !== "FINISHED" && state.phase !== "NOT_STARTED";
     return (
-      <div className={cn("grid grid-cols-2", near ? "border-t-4 border-white/80" : "border-b-4 border-white/80")} aria-label={`${t?.name ?? side} side`}>
-        {boxesFor(side, near).map((b, i) => {
+      <div className="grid grid-rows-2" aria-label={`${t?.name ?? side} side`}>
+        {boxesFor(side, onLeft).map((b, i) => {
           const isServer = serving && b.id != null && b.id === state.serverId;
           return (
             <div
               key={i}
-              className={cn("relative flex items-center justify-center p-2 text-center", i === 0 && "border-r-2 border-white/60", big ? "min-h-28" : "min-h-20 sm:min-h-24")}
+              className={cn("relative flex items-center justify-center p-2 text-center", i === 0 && "border-b-2 border-white/60", big ? "min-h-28" : "min-h-20 sm:min-h-24")}
               style={{ background: `${color}${b.id ? "33" : "14"}` }}
             >
               {b.id && (
@@ -71,7 +73,7 @@ export function CourtDiagram({ state, teamA, teamB, players, className, big }: P
                   )}
                 </motion.div>
               )}
-              <span className="absolute bottom-1 left-1.5 text-[9px] font-bold uppercase tracking-widest text-white/40">{b.court === "RIGHT" ? "R" : "L"}</span>
+              <span className={cn("absolute bottom-1 text-[9px] font-bold uppercase tracking-widest text-white/40", onLeft ? "left-1.5" : "right-1.5")}>{b.court === "RIGHT" ? "R" : "L"}</span>
             </div>
           );
         })}
@@ -80,12 +82,12 @@ export function CourtDiagram({ state, teamA, teamB, players, className, big }: P
   };
 
   return (
-    <div className={cn("overflow-hidden rounded-xl border-4 border-white/80 bg-[#14532d]", className)} role="img" aria-label="Court positions">
-      {half(farSide, false)}
-      <div className="relative h-3 bg-white/90">
-        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-black/40" />
+    <div className={cn("grid grid-cols-[1fr_auto_1fr] overflow-hidden rounded-xl border-4 border-white/80 bg-[#14532d]", className)} role="img" aria-label="Court positions">
+      {half(leftSide, true)}
+      <div className="relative w-3 bg-white/90" aria-hidden>
+        <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-black/40" />
       </div>
-      {half(nearSide, true)}
+      {half(rightSide, false)}
     </div>
   );
 }
