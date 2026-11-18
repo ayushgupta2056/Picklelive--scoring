@@ -37,7 +37,7 @@ export function StandingsTable({ groupId, compact }: { groupId: string; compact?
             const team = lk.teams.get(r.teamId);
             const q = r.rank <= g.qualifiers;
             return (
-              <tr key={r.teamId} className={cn("border-t", q && "bg-lime/[0.06]")}>
+              <tr key={r.teamId} className={cn("border-t", q && "bg-lime/[0.06]")} data-testid={`standing-${team?.code}`} data-points={r.tiePoints}>
                 <td className={cn("p-2 font-bold", q && "border-l-4 border-lime")}>{r.rank}</td>
                 <td className="p-2"><Link to={`${base}/teams/${r.teamId}`} className="flex items-center gap-2 font-semibold hover:underline"><TeamChip team={team} size="sm" /><span className="truncate">{team?.name}</span></Link></td>
                 {shown.map(([k, , f, hide]) => <td key={k} className={cn("p-2 text-right text-muted-foreground", hide && "hidden md:table-cell")}>{f(r)}</td>)}

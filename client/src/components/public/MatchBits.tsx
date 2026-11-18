@@ -57,9 +57,9 @@ export function TieScoreLine({ tie, big }: { tie: TieSummary; big?: boolean }) {
         <TeamChip team={a} size={big ? "lg" : "md"} />
       </div>
       <div className={cn("flex shrink-0 items-center gap-1 font-black tnum", big ? "text-4xl sm:text-6xl" : "text-2xl")}>
-        <AnimatedNumber value={tie.scoreA} className={cn(winA && "text-lime-accent")} />
+        <span data-testid="tie-score-a"><AnimatedNumber value={tie.scoreA} className={cn(winA && "text-lime-accent")} /></span>
         <span className="text-muted-foreground">–</span>
-        <AnimatedNumber value={tie.scoreB} className={cn(winB && "text-lime-accent")} />
+        <span data-testid="tie-score-b"><AnimatedNumber value={tie.scoreB} className={cn(winB && "text-lime-accent")} /></span>
       </div>
       <div className={cn("flex min-w-0 flex-1 items-center gap-2", tie.winner && !winB && "opacity-60")}>
         <TeamChip team={bTeam} size={big ? "lg" : "md"} />

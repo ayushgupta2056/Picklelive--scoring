@@ -94,6 +94,7 @@ function TournamentList() {
   const nav = useNavigate();
   const q = useQuery({ queryKey: ["admin-tournaments"], queryFn: () => api.get<TRow[]>("/api/admin/tournaments") });
   const [open, setOpen] = useState(false);
+  const [slugTouched, setSlugTouched] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const [f, setF] = useState({ name: "", slug: "", venue: "", startDate: today, endDate: today, ageCutoffDate: `${today.slice(0, 4)}-01-01`, timezone: "Asia/Kolkata", withPresets: true });
   return (
@@ -133,8 +134,8 @@ function TournamentList() {
               toast.error(errorMessage(err));
             }
           }}>
-            <Field label="Name"><Input value={f.name} required onChange={(e) => setF({ ...f, name: e.target.value, slug: f.slug || "" })} onBlur={() => !f.slug && setF((x) => ({ ...x, slug: x.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") }))} /></Field>
-            <Field label="URL slug" hint="Public page: /t/your-slug"><Input value={f.slug} required pattern="[a-z0-9][a-z0-9-]+" onChange={(e) => setF({ ...f, slug: e.target.value.toLowerCase() })} /></Field>
+            <Field label="Name"><Input value={f.name} required onChange={(e) => setF({ ...f, name: e.target.value, slug: slugTouched ? f.slug : e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") })} /></Field>
+            <Field label="URL slug" hint="Public page: /t/your-slug"><Input value={f.slug} required pattern="[a-z0-9][a-z0-9-]+" onChange={(e) => { setSlugTouched(true); setF({ ...f, slug: e.target.value.toLowerCase() }); }} /></Field>
             <Field label="Venue"><Input value={f.venue} onChange={(e) => setF({ ...f, venue: e.target.value })} /></Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Start date"><Input type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></Field>
