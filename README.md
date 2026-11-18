@@ -45,6 +45,13 @@ One Render web service (Node 20 + Express + Socket.IO, which also serves the Rea
 - Each tie can override its own slots: add, remove or reorder.
 - Stages: round-robin groups (circle method, optional double round), seeded knockout (byes, third-place tie, drag-to-reseed, fill from group standings with cross seeding), or both.
 
+**One team, one tie at a time**
+- Once Team A vs Team B has started, neither team can start a tie against anyone else until every category match of A vs B is finished.
+- The server enforces this for referees, the admin and match links alike, and names the unfinished tie in its message.
+- The referee console, the referee wizard and the admin tie page warn in advance.
+- The schedule board flags a team booked into overlapping ties.
+- Auto-schedule never starts a team's next tie before its previous tie ends. Knockout rounds wait for the ties that feed them.
+
 **Lineups at match time**
 - For each slot, pick players from that team's roster (uploaded once by the admin). Ineligible players are greyed out with the reason, such as "Over 17 on cutoff date", "Mixed needs 1M + 1F", "Already used in 2 categories this tie" or "Not in roster".
 - The admin can force an override with a mandatory reason, which goes to the audit log.

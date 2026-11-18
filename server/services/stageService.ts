@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { HttpError, notFound } from "../errors";
 import { bracket, crossSeed, roundRobin } from "@shared/tournament/fixtures";
+import { planSchedule } from "@shared/tournament/schedulePlan";
 import { createMatchesForTie } from "./matchService";
 import { buildBundle } from "./bundle";
 import { settingsOf } from "./serialize";
@@ -135,25 +136,35 @@ export async function autoSchedule(tournamentId: string, startISO: string, slotM
     include: { matches: { orderBy: { slotOrder: "asc" } }, stage: true },
     orderBy: [{ stage: { order: "asc" } }, { round: "asc" }, { bracketPos: "asc" }, { createdAt: "asc" }],
   });
-  let time = new Date(startISO).getTime();
-  let c = 0;
-  let count = 0;
+  const startMs = new Date(startISO).getTime();
+  const skip = (m: { status: string; scheduledAt: Date | null }) => ["FINISHED", "LIVE", "PAUSED", "WALKOVER", "RETIRED", "NOT_REQUIRED"].includes(m.status) || (onlyUnscheduled && !!m.scheduledAt);
+  // Teams stay busy until the end of matches we are NOT moving (already played or already scheduled).
+  const busyUntil: Record<string, number> = {};
   for (const tie of ties) {
     for (const m of tie.matches) {
-      if (["FINISHED", "LIVE", "WALKOVER", "RETIRED", "NOT_REQUIRED"].includes(m.status)) continue;
-      if (onlyUnscheduled && m.scheduledAt) continue;
-      await prisma.match.update({ where: { id: m.id }, data: { court: courts[c], scheduledAt: new Date(time), durationMin: slotMinutes } });
-      count++;
-      c++;
-      if (c >= courts.length) {
-        c = 0;
-        time += slotMinutes * 60000;
-      }
-    }
-    if (tie.matches.length) {
-      const first = await prisma.match.findFirst({ where: { tieId: tie.id }, orderBy: { scheduledAt: "asc" } });
-      await prisma.tie.update({ where: { id: tie.id }, data: { scheduledAt: first?.scheduledAt ?? null, court: first?.court ?? null } });
+      if (!skip(m) || !m.scheduledAt) continue;
+      const end = m.scheduledAt.getTime() + m.durationMin * 60000;
+      for (const team of [tie.teamAId, tie.teamBId]) if (team) busyUntil[team] = Math.max(busyUntil[team] ?? 0, end);
     }
   }
-  return { scheduled: count };
+  // Knockout ties with TBD teams wait for the ties that feed them (QF → SF → Final), via a shared "feed" key.
+  const plan = planSchedule(
+    ties.map((tie) => ({
+      id: tie.id,
+      teamIds: [tie.teamAId, tie.teamBId].filter(Boolean) as string[],
+      waitFor: [`feed-${tie.id}`],
+      marks: [tie.nextTieId, tie.loserNextTieId].filter(Boolean).map((id) => `feed-${id}`),
+      matchIds: tie.matches.filter((m) => !skip(m)).map((m) => m.id),
+    })),
+    courts,
+    startMs,
+    slotMinutes,
+    busyUntil,
+  );
+  for (const p of plan) await prisma.match.update({ where: { id: p.matchId }, data: { court: p.court, scheduledAt: new Date(p.start), durationMin: slotMinutes } });
+  for (const tie of ties) {
+    const first = await prisma.match.findFirst({ where: { tieId: tie.id, scheduledAt: { not: null } }, orderBy: { scheduledAt: "asc" } });
+    await prisma.tie.update({ where: { id: tie.id }, data: { scheduledAt: first?.scheduledAt ?? null, court: first?.court ?? null } });
+  }
+  return { scheduled: plan.length };
 }

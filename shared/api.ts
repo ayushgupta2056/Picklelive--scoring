@@ -242,6 +242,8 @@ export interface RefBundle {
   /** Full event log (including UNDOs) so the client can replay optimistically with the same engine. */
   events: EngineEvent[];
   refSubmitted: boolean;
+  /** Set when either team is still playing another unfinished tie (the match can't start yet). */
+  busy?: string | null;
 }
 
 /** Socket.IO server -> client event names. */

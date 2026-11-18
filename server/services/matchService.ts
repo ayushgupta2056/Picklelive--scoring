@@ -4,6 +4,7 @@ import { HttpError, notFound } from "../errors";
 import { tryAppend, replay } from "@shared/scoring/engine";
 import type { EngineEvent, MatchConfig, MatchState, Side } from "@shared/scoring/types";
 import { computeTie, type TieRules } from "@shared/tie/tieEngine";
+import { busyConflicts, busyMessage } from "@shared/tie/teamBusy";
 import { emitInvalidate, emitMatch, emitTie } from "../realtime";
 import { matchSummary, resolveConfig, tieSummary } from "./serialize";
 import { freshRefToken } from "../tokens";
@@ -75,6 +76,16 @@ export async function appendEvent(matchId: string, ev: IncomingEvent, actor: str
       if (ev.type === "SETUP") {
         const { tie } = match;
         if (!tie.teamAId || !tie.teamBId) throw new HttpError(409, "Both teams must be known");
+        // One team, one tie at a time: neither team may be in another unfinished tie.
+        const others = await tx.tie.findMany({
+          where: { tournamentId: tie.tournamentId, status: { not: "FINISHED" }, OR: [{ teamAId: { in: [tie.teamAId, tie.teamBId] } }, { teamBId: { in: [tie.teamAId, tie.teamBId] } }] },
+          include: { matches: { select: { status: true, seq: true } } },
+        });
+        const busy = busyConflicts(others.concat(others.some((o) => o.id === tie.id) ? [] : [{ ...tie, matches: [] }]), tie.id);
+        if (busy.length) {
+          const teams = await tx.team.findMany({ where: { id: { in: busy.flatMap((b) => [b.tie.teamAId, b.tie.teamBId]).filter(Boolean) as string[] } } });
+          throw new HttpError(409, busyMessage(busy, (id) => teams.find((t) => t.id === id)?.name ?? "A team"), { busyTieIds: busy.map((b) => b.tie.id) });
+        }
         const la = match.lineups.find((l) => l.teamId === tie.teamAId);
         const lb = match.lineups.find((l) => l.teamId === tie.teamBId);
         const need = config.format === "DOUBLES" ? 2 : 1;

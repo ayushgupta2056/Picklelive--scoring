@@ -163,6 +163,11 @@ function Wizard({ r, b }: { r: R; b: RefBundle }) {
       </div>
 
       <div className="space-y-4 p-4">
+        {b.busy && (
+          <div role="alert" className="flex gap-2 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm font-semibold text-amber-600 dark:text-amber-300" data-testid="busy-warning">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> <span>{b.busy} You can enter lineups now, but the match can't start yet.</span>
+          </div>
+        )}
         {step === 0 && (
           <>
             <CourtSelect r={r} b={b} />
@@ -241,7 +246,7 @@ function Wizard({ r, b }: { r: R; b: RefBundle }) {
               <li>{b.config.scoringType === "RALLY" ? "Rally" : "Side-out"} scoring · {b.config.bestOf === 1 ? "1 game" : `best of ${b.config.bestOf} games`} to {b.config.pointsToWin}</li>
               <li>Opening call: <b className="tnum">{b.config.scoringType === "SIDE_OUT" && b.config.format === "DOUBLES" ? "0-0-2" : "0-0"}</b></li>
             </ul>
-            <Button size="lg" className="h-20 w-full text-2xl font-black" onClick={start}>START MATCH</Button>
+            <Button size="lg" className="h-20 w-full text-2xl font-black" onClick={start} disabled={!!b.busy}>START MATCH</Button>
             <Button variant="ghost" className="w-full" onClick={() => setStep(3)}>Back</Button>
           </>
         )}

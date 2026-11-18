@@ -13,6 +13,7 @@ import type { RefBundle } from "@shared/api";
 import type { EngineEvent, MatchConfig } from "@shared/scoring/types";
 import { getAdmin } from "../auth";
 import { getRefSession } from "../refSession";
+import { busyConflicts, busyMessage } from "@shared/tie/teamBusy";
 import { createMatchesForTie } from "../services/matchService";
 import { slotsForTemplate } from "../services/stageService";
 import { settingsOf } from "../services/serialize";
@@ -48,6 +49,19 @@ export async function buildRefBundle(matchId: string): Promise<RefBundle> {
   const teamIds = [m.tie.teamAId, m.tie.teamBId].filter(Boolean) as string[];
   const players = await prisma.player.findMany({ where: { teamId: { in: teamIds } } });
   const lineups = await tieLineups(m.tieId, m.id);
+  // one team, one tie at a time: tell the referee up front if either team is still busy in another tie
+  let busy: string | null = null;
+  if (m.tie.teamAId && m.tie.teamBId && m.seq === 0) {
+    const others = await prisma.tie.findMany({
+      where: { tournamentId: m.tournamentId, status: { not: "FINISHED" }, OR: [{ teamAId: { in: [m.tie.teamAId, m.tie.teamBId] } }, { teamBId: { in: [m.tie.teamAId, m.tie.teamBId] } }] },
+      include: { matches: { select: { status: true, seq: true } }, teamA: true, teamB: true },
+    });
+    const c = busyConflicts(others, m.tieId);
+    if (c.length) {
+      const names = new Map(others.flatMap((o) => [o.teamA, o.teamB]).filter(Boolean).map((t) => [t!.id, t!.name]));
+      busy = busyMessage(c, (id) => names.get(id ?? "") ?? "A team");
+    }
+  }
   return {
     tournament: pubTournament(m.tournament),
     tie: tieSummary(m.tie, { revealAll: true }),
@@ -61,6 +75,7 @@ export async function buildRefBundle(matchId: string): Promise<RefBundle> {
     lineups: lineups.slots[0],
     events: m.events.map((e) => ({ type: e.type, payload: e.payload, at: e.createdAt.toISOString() }) as EngineEvent),
     refSubmitted: m.refSubmitted,
+    busy,
   };
 }
 

@@ -5,10 +5,14 @@ export interface ScheduledItem {
   start: Date | null;
   durationMin: number;
   playerIds: string[];
+  /** Tie the match belongs to, and that tie's two teams (for the one-tie-at-a-time rule). */
+  tieId?: string;
+  teamIds?: string[];
+  tieLabel?: string;
 }
 
 export interface Conflict {
-  kind: "COURT_OVERLAP" | "PLAYER_DOUBLE_BOOKED" | "REST_GAP";
+  kind: "COURT_OVERLAP" | "PLAYER_DOUBLE_BOOKED" | "REST_GAP" | "TEAM_OVERLAP";
   matchIds: string[];
   message: string;
 }
@@ -37,6 +41,26 @@ export function findConflicts(items: ScheduledItem[], restGapMinutes = 15, playe
           out.push({ kind: "REST_GAP", matchIds: [a.id, b.id], message: `${who}: only ${Math.round(gap)} min rest between ${a.label} and ${b.label}` });
         }
       }
+    }
+  }
+  // One team, one tie at a time: a team's ties must not overlap in time.
+  const ties = new Map<string, { start: number; end: number; teamIds: string[]; label: string; ids: string[] }>();
+  for (const m of timed) {
+    if (!m.tieId || !m.teamIds?.length) continue;
+    const w = ties.get(m.tieId) ?? { start: Infinity, end: -Infinity, teamIds: m.teamIds, label: m.tieLabel ?? m.tieId, ids: [] };
+    w.start = Math.min(w.start, m.start!.getTime());
+    w.end = Math.max(w.end, end(m).getTime());
+    w.ids.push(m.id);
+    ties.set(m.tieId, w);
+  }
+  const list = [...ties.values()];
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i];
+      const b = list[j];
+      const shared = a.teamIds.filter((t) => b.teamIds.includes(t));
+      if (!shared.length || !(a.start < b.end && b.start < a.end)) continue;
+      out.push({ kind: "TEAM_OVERLAP", matchIds: [...a.ids, ...b.ids], message: `${shared.map((t) => playerNames[t] ?? t).join(", ")} would play two ties at once: ${a.label} and ${b.label}` });
     }
   }
   return out;

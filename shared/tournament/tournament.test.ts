@@ -71,4 +71,16 @@ describe("conflicts", () => {
     expect(kinds).toContain("PLAYER_DOUBLE_BOOKED");
     expect(kinds).toContain("REST_GAP");
   });
+  it("flags a team scheduled in two overlapping ties", () => {
+    const c = findConflicts([
+      { id: "m1", label: "AB MD", court: "C1", start: t(9), durationMin: 30, playerIds: [], tieId: "AB", teamIds: ["A", "B"], tieLabel: "A v B" },
+      { id: "m2", label: "AB WD", court: "C2", start: t(9, 30), durationMin: 30, playerIds: [], tieId: "AB", teamIds: ["A", "B"], tieLabel: "A v B" },
+      { id: "m3", label: "AC MD", court: "C3", start: t(9, 45), durationMin: 30, playerIds: [], tieId: "AC", teamIds: ["A", "C"], tieLabel: "A v C" },
+      { id: "m4", label: "DE MD", court: "C4", start: t(9, 45), durationMin: 30, playerIds: [], tieId: "DE", teamIds: ["D", "E"], tieLabel: "D v E" },
+    ], 0, { A: "Aces" });
+    const team = c.filter((x) => x.kind === "TEAM_OVERLAP");
+    expect(team).toHaveLength(1);
+    expect(team[0].message).toMatch(/Aces would play two ties at once/);
+  });
 });
+

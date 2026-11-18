@@ -13,6 +13,7 @@ import { useBundle, useLookups } from "@/hooks/useBundle";
 import { api, errorMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { MatchSummary, TieSummary } from "@shared/api";
+import { busyConflicts, busyMessage } from "@shared/tie/teamBusy";
 
 interface Me { admin: boolean; referee: boolean; refUsername?: string; email?: string }
 interface TRow { id: string; slug: string; name: string }
@@ -38,7 +39,7 @@ function RefLogin() {
   const qc = useQueryClient();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [working, setWorking] = useState(false);
   return (
     <div className="grid min-h-dvh place-items-center p-4">
       <Card className="w-full max-w-sm p-5">
@@ -47,19 +48,19 @@ function RefLogin() {
         <p className="mt-1 text-sm text-muted-foreground">One shared login for all referees. Ask the tournament admin for it.</p>
         <form className="mt-5 grid gap-4" onSubmit={async (e) => {
           e.preventDefault();
-          setBusy(true);
+          setWorking(true);
           try {
             await api.post("/api/auth/ref-login", { username, password });
             await qc.invalidateQueries({ queryKey: ["me"] });
           } catch (err) {
             toast.error(errorMessage(err));
           } finally {
-            setBusy(false);
+            setWorking(false);
           }
         }}>
           <Field label="Username"><Input autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required className="h-14 text-lg" /></Field>
           <Field label="Password"><Input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required className="h-14 text-lg" /></Field>
-          <Button type="submit" size="lg" className="h-14 text-lg" disabled={busy}>{busy && <Loader2 className="animate-spin" />} Sign in</Button>
+          <Button type="submit" size="lg" className="h-14 text-lg" disabled={working}>{working && <Loader2 className="animate-spin" />} Sign in</Button>
         </form>
       </Card>
     </div>
@@ -83,7 +84,7 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
   const [tieId, setTieId] = useState<string | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
   const [court, setCourt] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [working, setWorking] = useState(false);
 
   // remember the pair in the URL so "Choose another match" brings the referee back here
   useEffect(() => {
@@ -107,6 +108,9 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
     setMatchId(null);
   }, [ties]);
   const tie = ties.find((t) => t.id === tieId);
+  // one team, one tie at a time
+  const busy = useMemo(() => (b && tie ? busyConflicts(b.ties, tie.id) : []), [b, tie]);
+  const blocked = busy.length > 0;
   const match = tie?.matches.find((m) => m.id === matchId);
   useEffect(() => setCourt(match?.court ?? ""), [match?.id, match?.court]);
 
@@ -115,14 +119,14 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
 
   const go = async () => {
     if (!match) return;
-    setBusy(true);
+    setWorking(true);
     try {
       if (court && court !== match.court) await api.put(`/api/ref/${match.id}/court`, { court });
       nav(`/ref/${match.id}`);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
-      setBusy(false);
+      setWorking(false);
     }
   };
 
@@ -171,8 +175,8 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
             {ties.length === 0 ? (
               <div className="rounded-xl border border-dashed p-4 text-sm">
                 <p className="mb-3 text-muted-foreground">There's no tie between {team(teamA)?.name} and {team(teamB)?.name} in the schedule.</p>
-                <Button variant="outline" disabled={busy} onClick={async () => {
-                  setBusy(true);
+                <Button variant="outline" disabled={working} onClick={async () => {
+                  setWorking(true);
                   try {
                     await api.post("/api/ref-session/ties", { tournamentId: b.tournament.id, teamAId: teamA, teamBId: teamB });
                     await qc.invalidateQueries({ queryKey: ["bundle", slug] });
@@ -180,7 +184,7 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
                   } catch (e) {
                     toast.error(errorMessage(e));
                   } finally {
-                    setBusy(false);
+                    setWorking(false);
                   }
                 }}><Plus /> Start an extra tie</Button>
               </div>
@@ -199,6 +203,11 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
           </Step>
         )}
 
+        {tie && busy.length > 0 && (
+          <div role="alert" className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm font-semibold text-amber-600 dark:text-amber-300" data-testid="busy-warning">
+            {busyMessage(busy, (id) => team(id)?.name ?? "A team")}
+          </div>
+        )}
         {tie && (
           <Step n={3} title="Category">
             <div className="grid gap-2" role="listbox" aria-label="Category matches">
@@ -220,11 +229,12 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
       {match && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
           <div className="mx-auto max-w-xl">
-            <Button size="lg" className="h-16 w-full text-lg font-black" disabled={busy || !court} onClick={go} data-testid="ref-continue">
-              {busy && <Loader2 className="animate-spin" />}
+            <Button size="lg" className="h-16 w-full text-lg font-black" disabled={working || !court || (blocked && match.seq === 0)} onClick={go} data-testid="ref-continue">
+              {working && <Loader2 className="animate-spin" />}
               {match.status === "LIVE" || match.status === "PAUSED" ? "Resume scoring" : "Continue: players, toss & scoring"} <ChevronRight />
             </Button>
             {!court && <p className="mt-1 text-center text-xs text-muted-foreground">Pick the court first.</p>}
+            {court && blocked && match.seq === 0 && <p className="mt-1 text-center text-xs text-amber-500">One of these teams is still playing another tie.</p>}
           </div>
         </div>
       )}

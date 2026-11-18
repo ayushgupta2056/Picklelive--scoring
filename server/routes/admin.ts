@@ -628,7 +628,8 @@ adminRouter.get("/tournaments/:tid/conflicts", ah(async (req, res) => {
     include: { lineups: true, category: true, tie: { include: { teamA: true, teamB: true } } },
   });
   const players = await prisma.player.findMany({ where: { tournamentId: tid }, select: { id: true, name: true } });
-  const names = Object.fromEntries(players.map((x) => [x.id, x.name]));
+  const teams = await prisma.team.findMany({ where: { tournamentId: tid }, select: { id: true, name: true } });
+  const names = Object.fromEntries([...players.map((x) => [x.id, x.name]), ...teams.map((x) => [x.id, x.name])]);
   const conflicts = findConflicts(
     matches.map((m) => ({
       id: m.id,
@@ -637,6 +638,9 @@ adminRouter.get("/tournaments/:tid/conflicts", ah(async (req, res) => {
       start: m.scheduledAt,
       durationMin: m.durationMin,
       playerIds: m.lineups.flatMap((l) => l.playerIds),
+      tieId: m.tieId,
+      teamIds: [m.tie.teamAId, m.tie.teamBId].filter(Boolean) as string[],
+      tieLabel: `${m.tie.teamA?.code ?? "TBD"} v ${m.tie.teamB?.code ?? "TBD"}`,
     })),
     settingsOf(t).restGapMinutes,
     names,

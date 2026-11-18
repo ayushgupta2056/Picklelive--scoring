@@ -186,6 +186,25 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
   await expect(pubTie.getByTestId("tie-score-a")).toHaveText("1");
   await expect(pubTie.getByText("11-0").first()).toBeVisible();
 
+  // ---------- one team, one tie at a time ----------
+  // While AAA v BBB is in progress, a second tie involving these teams can't start a match.
+  {
+    const tid0 = base.split("/admin/t/")[1];
+    const stages = (await (await page.request.get(`/api/admin/tournaments/${tid0}`)).json()).stages;
+    const extra = await (await page.request.post(`/api/admin/tournaments/${tid0}/ties`, { data: { stageId: stages[0].id, teamAId: tie.tie.teamAId, teamBId: tie.tie.teamBId, roundLabel: "Extra" } })).json();
+    const extraTie = await (await page.request.get(`/api/admin/ties/${extra.id}`)).json();
+    const m0 = extraTie.tie.matches[0];
+    const r = await page.request.post(`/api/admin/matches/${m0.id}/events`, {
+      data: { seq: 1, idempotencyKey: `busy-${Date.now()}-0001`, event: { type: "SETUP", payload: { firstServingTeam: "A", positions: { A: { right: "x", left: "y" }, B: { right: "z", left: "w" } } } } },
+    });
+    expect(r.status()).toBe(409);
+    expect((await r.json()).error).toMatch(/is still playing .*vs .*Finish that tie/);
+    await page.goto(`${base}/ties/${extra.id}`);
+    await expect(page.getByTestId("busy-warning")).toBeVisible();
+    await page.request.delete(`/api/admin/ties/${extra.id}`);
+    await page.goto(`${base}/ties/${tieId}`);
+  }
+
   // ---------- a referee with the SHARED referee login scores the MD match (1 game to 11) ----------
   const panel2 = page.getByTestId("match-panel-2");
   await expect(panel2.getByRole("radiogroup", { name: "Games" }).getByRole("radio", { name: "1", exact: true })).toHaveAttribute("aria-checked", "true");

@@ -20,12 +20,13 @@ import { isoToZoned, zonedToISO } from "@/lib/format";
 import { uid } from "@/lib/utils";
 import { SOCKET, type PublicCategory, type MatchSummary, type SlotLineupInfo, type TieLineups, type TieSummary } from "@shared/api";
 import type { MatchConfig } from "@shared/scoring/types";
+import { busyConflicts, busyMessage } from "@shared/tie/teamBusy";
 import { useA, useAct } from "./data";
 import { ConfirmButton } from "./ui";
 
 export default function TieAdmin() {
   const { tieId = "" } = useParams();
-  const { tid, lk, t } = useA();
+  const { tid, lk, t, b } = useA();
   const qc = useQueryClient();
   const key = ["admin-tie", tieId];
   const q = useQuery({ queryKey: key, queryFn: () => api.get<{ tie: TieSummary; lineups: TieLineups }>(`/api/admin/ties/${tieId}`) });
@@ -63,6 +64,11 @@ export default function TieAdmin() {
           <Button asChild variant="ghost"><a href={`/t/${t.slug}/tv?tie=${tie.id}`} target="_blank" rel="noreferrer">TV</a></Button>
         </div>
       </Card>
+      {busyConflicts(b.ties, tie.id).length > 0 && (
+        <p role="alert" className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm font-semibold text-amber-600 dark:text-amber-400" data-testid="busy-warning">
+          {busyMessage(busyConflicts(b.ties, tie.id), (id) => lk.teams.get(id ?? "")?.name ?? "A team")} Lineups can be entered, but no match of this tie can start yet.
+        </p>
+      )}
       {lineups.blind && <p className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400">Blind lineups: each team's lineup stays hidden publicly until both teams have submitted.</p>}
       {(!tie.teamAId || !tie.teamBId) && <p className="rounded-lg bg-muted p-3 text-sm">Teams will be filled in automatically when the previous round finishes.</p>}
       <div className="grid gap-4">
