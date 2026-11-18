@@ -1,0 +1,346 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Format {
+  SINGLES
+  DOUBLES
+}
+
+enum GenderRule {
+  ANY
+  MALE
+  FEMALE
+  MIXED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum AgeRuleType {
+  NONE
+  UNDER
+  OVER
+  RANGE
+}
+
+enum StageType {
+  ROUND_ROBIN
+  KNOCKOUT
+}
+
+enum TieStatus {
+  SCHEDULED
+  IN_PROGRESS
+  DECIDED
+  FINISHED
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LINEUP
+  LIVE
+  PAUSED
+  FINISHED
+  WALKOVER
+  RETIRED
+  NOT_REQUIRED
+}
+
+model Tournament {
+  id                String        @id @default(cuid())
+  slug              String        @unique
+  name              String
+  venue             String?
+  startDate         DateTime?     @db.Date
+  endDate           DateTime?     @db.Date
+  logoMediaId       String?
+  timezone          String        @default("Asia/Kolkata")
+  ageCutoffDate     DateTime      @db.Date
+  courtNames        String[]      @default(["Court 1", "Court 2", "Court 3", "Court 4"])
+  /// { pointsWin, pointsDraw, pointsLoss, tiebreakOrder[], restGapMinutes, soundsEnabled, matchDurationMinutes }
+  settings          Json          @default("{}")
+  defaultTemplateId String?
+  published         Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  categories        Category[]
+  templates         TieTemplate[]
+  teams             Team[]
+  players           Player[]
+  stages            Stage[]
+  ties              Tie[]
+  matches           Match[]
+  audit             AuditLog[]
+}
+
+model Category {
+  id            String            @id @default(cuid())
+  tournamentId  String
+  tournament    Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  name          String
+  code          String
+  format        Format
+  genderRule    GenderRule        @default(ANY)
+  ageRuleType   AgeRuleType       @default(NONE)
+  ageMin        Int?
+  ageMax        Int?
+  skillMin      Float?
+  skillMax      Float?
+  /// Default scoring config (MatchConfig partial)
+  scoringConfig Json              @default("{}")
+  color         String            @default("#C6FF00")
+  icon          String            @default("trophy")
+  sortOrder     Int               @default(0)
+  createdAt     DateTime          @default(now())
+  slots         TieTemplateSlot[]
+  matches       Match[]
+
+  @@unique([tournamentId, code])
+}
+
+model TieTemplate {
+  id              String            @id @default(cuid())
+  tournamentId    String
+  tournament      Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  name            String
+  /// DECIDER | DRAW
+  levelPolicy     String            @default("DECIDER")
+  stopEarly       Boolean           @default(true)
+  /// NOT_REQUIRED | DEAD_RUBBER
+  earlyStopMode   String            @default("NOT_REQUIRED")
+  usageLimit      Int               @default(2)
+  allowPairRepeat Boolean           @default(false)
+  rosterMin       Int               @default(4)
+  rosterMax       Int               @default(12)
+  blindLineup     Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  slots           TieTemplateSlot[]
+  stages          Stage[]
+  ties            Tie[]
+}
+
+model TieTemplateSlot {
+  id         String      @id @default(cuid())
+  templateId String
+  template   TieTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  order      Int
+  categoryId String
+  category   Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  weight     Int         @default(1)
+  isDecider  Boolean     @default(false)
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  mime      String
+  data      Bytes
+  createdAt DateTime @default(now())
+}
+
+model Team {
+  id             String      @id @default(cuid())
+  tournamentId   String
+  tournament     Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  name           String
+  code           String
+  color          String      @default("#3B82F6")
+  logoMediaId    String?
+  captain        String?
+  managerName    String?
+  managerContact String?
+  createdAt      DateTime    @default(now())
+  players        Player[]
+  groups         GroupTeam[]
+  tiesA          Tie[]       @relation("teamA")
+  tiesB          Tie[]       @relation("teamB")
+  lineups        MatchLineup[]
+
+  @@unique([tournamentId, code])
+}
+
+model Player {
+  id           String     @id @default(cuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teamId       String?
+  team         Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  name         String
+  photoMediaId String?
+  gender       Gender
+  dob          DateTime?  @db.Date
+  skill        Float?
+  jersey       String?
+  handedness   String?
+  phone        String?
+  notes        String?
+  createdAt    DateTime   @default(now())
+
+  @@index([teamId])
+}
+
+model Stage {
+  id           String       @id @default(cuid())
+  tournamentId String
+  tournament   Tournament   @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  name         String
+  type         StageType
+  order        Int          @default(0)
+  templateId   String?
+  template     TieTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  /// RR: { qualifiersPerGroup, doubleRoundRobin }  KO: { seedTeamIds[], thirdPlace }
+  settings     Json         @default("{}")
+  groups       Group[]
+  ties         Tie[]
+}
+
+model Group {
+  id      String      @id @default(cuid())
+  stageId String
+  stage   Stage       @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  name    String
+  order   Int         @default(0)
+  teams   GroupTeam[]
+  ties    Tie[]
+}
+
+model GroupTeam {
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  teamId  String
+  team    Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  seed    Int    @default(0)
+
+  @@id([groupId, teamId])
+}
+
+model Tie {
+  id            String       @id @default(cuid())
+  tournamentId  String
+  tournament    Tournament   @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  stageId       String
+  stage         Stage        @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  groupId       String?
+  group         Group?       @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  round         Int          @default(1)
+  roundLabel    String?
+  /// Position within its knockout round (0-based)
+  bracketPos    Int?
+  teamAId       String?
+  teamA         Team?        @relation("teamA", fields: [teamAId], references: [id], onDelete: SetNull)
+  teamBId       String?
+  teamB         Team?        @relation("teamB", fields: [teamBId], references: [id], onDelete: SetNull)
+  templateId    String?
+  template      TieTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  /// Set when the admin customised this tie's slots (true = matches differ from the template)
+  slotOverrides Json?
+  status        TieStatus    @default(SCHEDULED)
+  scoreA        Int          @default(0)
+  scoreB        Int          @default(0)
+  /// A | B | DRAW
+  winner        String?
+  court         String?
+  scheduledAt   DateTime?
+  nextTieId     String?
+  /// A | B : which side of the next tie the winner goes to
+  nextSide      String?
+  loserNextTieId String?
+  loserNextSide String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  matches       Match[]
+
+  @@index([tournamentId])
+  @@index([stageId])
+}
+
+model Match {
+  id             String        @id @default(cuid())
+  tournamentId   String
+  tournament     Tournament    @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  tieId          String
+  tie            Tie           @relation(fields: [tieId], references: [id], onDelete: Cascade)
+  categoryId     String
+  category       Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  slotOrder      Int
+  weight         Int           @default(1)
+  isDecider      Boolean       @default(false)
+  /// Per-match override of the category's scoring config
+  configOverride Json?
+  /// Resolved config at the time the match started
+  config         Json
+  status         MatchStatus   @default(SCHEDULED)
+  court          String?
+  scheduledAt    DateTime?
+  durationMin    Int           @default(30)
+  refTokenHash   String?
+  refTokenEnc    String?
+  seq            Int           @default(0)
+  cachedState    Json?
+  winner         String?
+  gamesA         Int           @default(0)
+  gamesB         Int           @default(0)
+  refSubmitted   Boolean       @default(false)
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lineups        MatchLineup[]
+  events         ScoreEvent[]
+
+  @@index([tieId])
+  @@index([tournamentId, status])
+}
+
+model MatchLineup {
+  id                String    @id @default(cuid())
+  matchId           String
+  match             Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  teamId            String
+  team              Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  playerIds         String[]
+  locked            Boolean   @default(false)
+  overrideReason    String?
+  overridePlayerIds String[]  @default([])
+  submittedAt       DateTime?
+  submittedBy       String?
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([matchId, teamId])
+}
+
+model ScoreEvent {
+  id             String   @id @default(cuid())
+  matchId        String
+  match          Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  seq            Int
+  type           String
+  payload        Json     @default("{}")
+  idempotencyKey String
+  actor          String
+  createdAt      DateTime @default(now())
+
+  @@unique([matchId, seq])
+  @@unique([matchId, idempotencyKey])
+}
+
+model AuditLog {
+  id           String      @id @default(cuid())
+  tournamentId String?
+  tournament   Tournament? @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  actor        String
+  action       String
+  entity       String
+  entityId     String?
+  details      Json        @default("{}")
+  createdAt    DateTime    @default(now())
+
+  @@index([tournamentId, createdAt])
+}
