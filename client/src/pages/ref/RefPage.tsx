@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import {
-  AlertTriangle, ArrowLeftRight, CheckCircle2, Clock, Flag, HeartPulse, Loader2, Lock, MoreHorizontal, RotateCcw, ShieldX, Trophy, Undo2, Volume2, VolumeX, WifiOff,
+  AlertTriangle, ArrowLeft, ArrowLeftRight, CheckCircle2, Clock, Flag, HeartPulse, Loader2, Lock, MoreHorizontal, RotateCcw, ShieldX, Trophy, Undo2, Volume2, VolumeX, WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -42,6 +42,15 @@ export default function RefPage() {
     document.title = "Referee · PickleLive";
   }, []);
 
+  if (r.revoked && r.sessionMode)
+    return (
+      <Center>
+        <ShieldX className="h-14 w-14 text-amber-500" />
+        <h1 className="text-2xl font-black">Referee sign-in needed</h1>
+        <p className="max-w-xs text-muted-foreground">Sign in with the referee login to score this match.</p>
+        <Button asChild size="lg"><Link to="/ref">Referee sign-in</Link></Button>
+      </Center>
+    );
   if (r.revoked)
     return (
       <Center>
@@ -61,6 +70,14 @@ export default function RefPage() {
         <div role="status" className={cn("sticky top-0 z-40 flex items-center justify-center gap-2 px-3 py-2 text-sm font-bold", r.netOk ? "bg-amber-500 text-black" : "bg-live text-white")}>
           <WifiOff className="h-4 w-4" />
           {r.netOk ? `Syncing ${r.queue.length} event${r.queue.length === 1 ? "" : "s"}…` : `Offline – ${r.queue.length} event${r.queue.length === 1 ? "" : "s"} queued`}
+        </div>
+      )}
+      {r.sessionMode && (
+        <div className="flex items-center justify-between border-b bg-card/60 px-3 py-1.5 text-sm">
+          <Link to={`/ref?t=${b.tournament.id}`} className="inline-flex min-h-10 items-center gap-1 font-semibold text-muted-foreground hover:text-foreground" data-testid="back-to-matches">
+            <ArrowLeft className="h-4 w-4" /> Choose another match
+          </Link>
+          <span className="text-xs text-muted-foreground">Referee login</span>
         </div>
       )}
       {st.phase === "NOT_STARTED" ? (

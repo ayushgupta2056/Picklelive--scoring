@@ -344,3 +344,10 @@ model AuditLog {
 
   @@index([tournamentId, createdAt])
 }
+
+/// App-wide key/value settings (e.g. the shared referee login set from Admin → Settings).
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

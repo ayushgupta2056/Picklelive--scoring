@@ -11,7 +11,8 @@ import { env } from "./env";
 import { ah, errorHandler } from "./errors";
 import { clearAdminCookie, getAdmin, issueAdminCookie, requireAdmin, verifyAdmin } from "./auth";
 import { publicRouter } from "./routes/public";
-import { refRouter } from "./routes/ref";
+import { refRouter, refSessionRouter } from "./routes/ref";
+import { clearRefCookie, getRefSession, issueRefCookie, verifyRefLogin } from "./refSession";
 import { adminRouter } from "./routes/admin";
 
 export function createApp() {
@@ -75,7 +76,19 @@ export function createApp() {
   });
   app.get("/api/auth/me", (req, res) => {
     const a = getAdmin(req);
-    res.json(a ? { admin: true, email: a.email } : { admin: false });
+    const r = getRefSession(req);
+    res.json({ admin: !!a, email: a?.email, referee: !!r, refUsername: r?.username });
+  });
+  // Shared referee login (one username/password for all referees).
+  app.post("/api/auth/ref-login", loginLimiter, ah(async (req, res) => {
+    const { username, password } = z.object({ username: z.string().trim().min(1).max(60), password: z.string().min(1).max(200) }).parse(req.body);
+    if (!(await verifyRefLogin(username, password))) return res.status(401).json({ error: "Wrong referee username or password" });
+    issueRefCookie(res, username.trim());
+    res.json({ ok: true, username: username.trim() });
+  }));
+  app.post("/api/auth/ref-logout", (_req, res) => {
+    clearRefCookie(res);
+    res.json({ ok: true });
   });
 
   app.use("/api/public", publicRouter);
@@ -83,6 +96,7 @@ export function createApp() {
     req.url = `/media${req.url}`;
     next();
   }, publicRouter);
+  app.use("/api/ref-session", refLimiter, refSessionRouter);
   app.use("/api/ref", refLimiter, refRouter);
   app.use("/api/admin", adminLimiter, requireAdmin, adminRouter);
   app.use("/api", (_req, res) => res.status(404).json({ error: "Not found" }));

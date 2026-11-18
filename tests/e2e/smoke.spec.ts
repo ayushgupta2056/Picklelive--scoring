@@ -186,16 +186,46 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
   await expect(pubTie.getByTestId("tie-score-a")).toHaveText("1");
   await expect(pubTie.getByText("11-0").first()).toBeVisible();
 
-  // ---------- admin enters the MD result → tie finished → standings update live ----------
+  // ---------- a referee with the SHARED referee login scores the MD match (1 game to 11) ----------
   const panel2 = page.getByTestId("match-panel-2");
-  // default format: 1 game (set) to 11, selectable per match
   await expect(panel2.getByRole("radiogroup", { name: "Games" }).getByRole("radio", { name: "1", exact: true })).toHaveAttribute("aria-checked", "true");
-  await panel2.getByRole("button", { name: "Enter result" }).click();
-  const sd = page.getByRole("dialog");
-  await sd.getByLabel("Game 1 team A").fill("11");
-  await sd.getByLabel("Game 1 team B").fill("5");
-  await expect(sd.getByRole("button", { name: "Add game" })).toHaveCount(0); // one-game match
-  await sd.getByRole("button", { name: /Save: Alpha Aces win 1-0/ }).click();
+  const phone2 = await browser.newContext({ ...devices["Pixel 7"] });
+  const r2 = await phone2.newPage();
+  await r2.goto("/ref");
+  await r2.getByLabel("Username").fill(process.env.REF_USERNAME ?? "referee");
+  await r2.getByLabel("Password").fill(process.env.REF_PASSWORD ?? "ref12345");
+  await r2.getByRole("button", { name: "Sign in" }).click();
+  await expect(r2.getByTestId("ref-team-a")).toBeVisible(); // console loaded after sign-in
+  const tSel = r2.getByLabel("Tournament");
+  const tournamentId = base.split("/admin/t/")[1];
+  if (await tSel.isVisible().catch(() => false)) await tSel.selectOption(tournamentId); // by id: names can repeat
+  await r2.getByTestId("ref-team-a").selectOption({ label: "Alpha Aces" });
+  await r2.getByTestId("ref-team-b").selectOption({ label: "Bravo Blasters" });
+  await r2.getByTestId("ref-cat-MD").click();
+  await r2.getByTestId("ref-court").selectOption("Court 3");
+  await r2.getByTestId("ref-continue").click();
+  await expect(r2).toHaveURL(/\/ref\/[^?]+$/); // no token: signed-in referee
+  // players from dropdowns (whole roster listed; ineligible ones disabled)
+  await r2.getByTestId("lineup-AAA-0").selectOption({ label: "Abe Adult (M, 35+)" });
+  await r2.getByTestId("lineup-AAA-1").selectOption({ label: "Arun Kid (M, U18)" });
+  await r2.getByRole("region", { name: "Alpha Aces lineup" }).getByRole("button", { name: "Submit lineup" }).click();
+  await expect(r2.getByRole("region", { name: "Alpha Aces lineup" }).getByText("Abe Adult & Arun Kid")).toBeVisible();
+  await r2.getByTestId("lineup-BBB-0").selectOption({ label: "Ben Kid (M, U18)" });
+  await r2.getByTestId("lineup-BBB-1").selectOption({ label: "Bob Adult (M, 35+)" });
+  await r2.getByRole("region", { name: "Bravo Blasters lineup" }).getByRole("button", { name: "Submit lineup" }).click();
+  await r2.getByRole("button", { name: /Confirm & lock lineups/ }).click();
+  await r2.getByRole("button", { name: /AAA/ }).first().click();
+  await r2.getByRole("button", { name: "Serve", exact: true }).click();
+  await r2.getByRole("button", { name: "Next" }).click();
+  await r2.getByRole("button", { name: "Next" }).click();
+  await r2.getByRole("button", { name: "Next" }).click();
+  await r2.getByRole("button", { name: "START MATCH" }).click();
+  await expect(call(r2)).toHaveText("0-0-2");
+  await rally(r2, "A", 11);
+  await expect(r2.getByRole("heading", { name: /Alpha Aces win/ })).toBeVisible();
+  await r2.getByRole("button", { name: "Submit final" }).click();
+  await expect(r2.getByText(/Final submitted\. Thank you/)).toBeVisible();
+  await phone2.close();
 
   await expect(pubTie.getByTestId("tie-score-a")).toHaveText("2");
   await expect(pubTie.getByText("Alpha Aces win the tie")).toBeVisible();
@@ -203,8 +233,7 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
   await expect(pubStand.getByTestId("standing-BBB")).toHaveAttribute("data-points", "0");
 
   // cleanup the e2e tournament
-  const tid = base.split("/admin/t/")[1];
-  await page.request.delete(`/api/admin/tournaments/${tid}`);
+  await page.request.delete(`/api/admin/tournaments/${tournamentId}`);
   await viewer.close();
   await phone.close();
 });

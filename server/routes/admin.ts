@@ -29,8 +29,21 @@ import { parsePlayerCsv, toCsv } from "@shared/csv";
 import { findConflicts } from "@shared/tournament/conflicts";
 import type { MatchConfig } from "@shared/scoring/types";
 import { DEFAULT_SETTINGS } from "@shared/api";
+import { refLoginConfig, setRefLogin } from "../refSession";
 
 export const adminRouter = Router();
+
+// ---------------- shared referee login ----------------
+adminRouter.get("/referee-login", ah(async (_req, res) => {
+  const c = await refLoginConfig();
+  res.json({ username: c.username, configured: !!c.hash, source: c.source });
+}));
+adminRouter.put("/referee-login", ah(async (req, res) => {
+  const { username, password } = z.object({ username: z.string().trim().min(3).max(60).regex(/^[A-Za-z0-9._-]+$/, "Letters, numbers, dot, dash, underscore"), password: z.string().min(6).max(200) }).parse(req.body);
+  await setRefLogin(username, password);
+  await audit(actor(res), "referee_login.update", "AppSetting", null, { username });
+  res.json({ ok: true });
+}));
 const p = (v: unknown) => String(v);
 const date = (s: string | null | undefined) => (s ? new Date(`${s}T00:00:00Z`) : s === null ? null : undefined);
 const actor = (res: { locals: Record<string, unknown> }) => String(res.locals.actor);

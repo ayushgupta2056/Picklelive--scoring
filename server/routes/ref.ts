@@ -12,6 +12,10 @@ import { resolveConfig, matchSummary, pubCategory, pubPlayer, pubTeam, pubTourna
 import type { RefBundle } from "@shared/api";
 import type { EngineEvent, MatchConfig } from "@shared/scoring/types";
 import { getAdmin } from "../auth";
+import { getRefSession } from "../refSession";
+import { createMatchesForTie } from "../services/matchService";
+import { slotsForTemplate } from "../services/stageService";
+import { settingsOf } from "../services/serialize";
 
 export const refRouter = Router();
 
@@ -23,9 +27,11 @@ async function refAuth(req: Request, res: Response, next: NextFunction) {
     const m = await prisma.match.findUnique({ where: { id: matchId }, select: { refTokenHash: true } });
     if (!m) throw notFound("Match not found");
     const admin = getAdmin(req);
+    const refSession = getRefSession(req);
     if (tokenMatches(token, m.refTokenHash)) res.locals.actor = `ref:${matchId}`;
     else if (admin) res.locals.actor = `admin:${admin.email}`;
-    else throw new HttpError(401, "This referee link is invalid or has been revoked");
+    else if (refSession) res.locals.actor = `referee:${refSession.username}`;
+    else throw new HttpError(401, token ? "This referee link is invalid or has been revoked" : "Referee sign-in required");
     res.locals.isAdmin = !!admin && !tokenMatches(token, m.refTokenHash);
     next();
   } catch (e) {
@@ -117,4 +123,38 @@ refRouter.post("/:matchId/submit", refAuth, ah(async (req, res) => {
   await prisma.match.update({ where: { id }, data: { refSubmitted: true } });
   await audit(res.locals.actor, "match.submit_final", "Match", id, { gamesA: m.gamesA, gamesB: m.gamesB, winner: m.winner }, m.tournamentId);
   res.json({ ok: true });
+}));
+
+/**
+ * Routes for referees signed in with the shared referee login. They pick teams, court and category
+ * themselves; scoring then uses the normal /api/ref/:matchId endpoints (which accept the session).
+ */
+export const refSessionRouter = Router();
+refSessionRouter.use((req, res, next) => {
+  const r = getRefSession(req);
+  const a = getAdmin(req);
+  if (!r && !a) return res.status(401).json({ error: "Referee sign-in required" });
+  res.locals.actor = r ? `referee:${r.username}` : `admin:${a!.email}`;
+  next();
+});
+
+/** Start an extra (friendly) tie between two teams when none exists yet. */
+refSessionRouter.post("/ties", ah(async (req, res) => {
+  const b = z.object({ tournamentId: z.string(), teamAId: z.string(), teamBId: z.string() }).parse(req.body);
+  if (b.teamAId === b.teamBId) throw new HttpError(400, "Pick two different teams");
+  const t = await prisma.tournament.findUniqueOrThrow({ where: { id: b.tournamentId }, include: { stages: { orderBy: { order: "asc" } } } });
+  const teams = await prisma.team.count({ where: { tournamentId: t.id, id: { in: [b.teamAId, b.teamBId] } } });
+  if (teams !== 2) throw new HttpError(400, "Unknown team");
+  const stage = t.stages[0];
+  if (!stage) throw new HttpError(409, "The tournament has no stage yet; ask the admin to set one up");
+  const templateId = stage.templateId ?? t.defaultTemplateId;
+  const tie = await prisma.$transaction(async (tx) => {
+    const slots = await slotsForTemplate(tx, templateId);
+    const tie = await tx.tie.create({ data: { tournamentId: t.id, stageId: stage.id, teamAId: b.teamAId, teamBId: b.teamBId, templateId, roundLabel: "Extra tie" } });
+    await createMatchesForTie(tx, tie, slots, settingsOf(t).matchDurationMinutes);
+    return tie;
+  });
+  await audit(res.locals.actor, "tie.create_by_referee", "Tie", tie.id, b, t.id);
+  emitInvalidate(t.id, "ties");
+  res.status(201).json({ id: tie.id });
 }));

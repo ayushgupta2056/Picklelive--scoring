@@ -26,7 +26,13 @@ One Render web service (Node 20 + Express + Socket.IO, which also serves the Rea
 
 **Access levels**
 - **Admin** (`/admin`): email and password from env (bcrypt), JWT in an httpOnly cookie. Full control.
-- **Referee** (`/ref/:matchId?token=…`): a random 32-character token per match. It is stored hashed (plus an encrypted copy so the admin can show the link again). It works for that one match only. The admin can copy it, show a QR code, regenerate it or revoke it. Revoking disconnects the referee's socket instantly.
+- **Referee: shared login** (`/ref`): **one username and password for all referees**, set in Admin → Settings → Referee login (or the `REF_USERNAME` / `REF_PASSWORD` env vars). After signing in, a referee:
+  1. picks **Team A vs Team B** (or starts an extra tie if they don't have one);
+  2. picks the **court** and the **category** match;
+  3. continues in the normal wizard: players from roster dropdowns, toss, sides, positions, games (sets) and points, then scoring.
+
+  A signed-in referee can score any match.
+- **Referee: per-match link** (`/ref/:matchId?token=…`): a random 32-character token per match. It is stored hashed (plus an encrypted copy so the admin can show the link again). It works for that one match only. The admin can copy it, show a QR code, regenerate it or revoke it. Revoking disconnects the referee's socket instantly.
 - **Public** (`/t/:slug`): live home, schedule, standings, brackets, teams, players and category leaders. Also `/t/:slug/tie/:id`, `/t/:slug/match/:id` and the big-screen `/t/:slug/tv`.
 
 **Teams, categories, ties**
@@ -122,6 +128,7 @@ npm run build && npm start     # http://localhost:3000
 | `ADMIN_EMAIL` | yes (prod) | Admin login email. |
 | `ADMIN_PASSWORD` | yes (prod) | Admin password. It is bcrypt-hashed at boot and never stored. |
 | `JWT_SECRET` | yes (prod) | Long random string. It signs the admin cookie and derives the key that encrypts ref tokens. Changing it signs everyone out and invalidates the displayable copies of ref links (regenerate them). |
+| `REF_USERNAME` / `REF_PASSWORD` | no | Default shared referee login. The admin can set or change it in Settings → Referee login, and that value takes precedence. In production, without either, referee sign-in stays off until the admin sets it. |
 | `APP_ORIGIN` | no | Public origin, e.g. `https://scores.example.com`. Used for CORS and cross-origin request blocking. On Render, `RENDER_EXTERNAL_URL` is used automatically. |
 | `PORT` | no | Defaults to 3000 (Render sets it). |
 | `NODE_ENV` | no | `npm start` sets `production` (secure cookies, strict env checks). |

@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 
 const Landing = lazy(() => import("./pages/Landing"));
 const RefPage = lazy(() => import("./pages/ref/RefPage"));
+const RefConsole = lazy(() => import("./pages/ref/RefConsole"));
 const PublicRoutes = lazy(() => import("./pages/public/PublicRoutes"));
 const TvPage = lazy(() => import("./pages/public/TvPage"));
 const AdminRoutes = lazy(() => import("./pages/admin/AdminRoutes"));
@@ -21,6 +22,7 @@ export default function App() {
     <Suspense fallback={<Fallback />}>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/ref" element={<RefConsole />} />
         <Route path="/ref/:matchId" element={<RefPage />} />
         <Route path="/t/:slug/tv" element={<TvPage />} />
         <Route path="/t/:slug/*" element={<PublicRoutes />} />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Download, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,7 @@ export default function SettingsPage() {
           <Field label="Default match slot (minutes)"><Input type="number" value={s.matchDurationMinutes} onChange={(e) => setS({ ...s, matchDurationMinutes: Number(e.target.value) })} /></Field>
           <Switch label="Referee sounds on by default" checked={s.soundsEnabled} onCheckedChange={(v) => setS({ ...s, soundsEnabled: v })} />
         </Card>
+        <RefLoginCard />
         <div className="flex gap-2">
           <Button onClick={save}>Save settings</Button>
           <ConfirmButton variant="destructive" className="ml-auto" title="Delete this tournament?" description="Everything (teams, players, ties, scores) is permanently deleted." confirmLabel="Delete forever"
@@ -85,5 +87,45 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** One shared login for every referee: they sign in at /ref, then pick teams, court and category themselves. */
+function RefLoginCard() {
+  const q = useQuery({ queryKey: ["referee-login"], queryFn: () => api.get<{ username: string; configured: boolean; source: string }>("/api/admin/referee-login") });
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const url = new URL("/ref", window.location.origin).toString();
+  return (
+    <Card className="grid gap-3 p-4 sm:grid-cols-2" data-testid="ref-login-card">
+      <div className="sm:col-span-2">
+        <h2 className="font-bold">Referee login</h2>
+        <p className="text-sm text-muted-foreground">
+          One shared username and password for all referees. They sign in at <a className="font-semibold text-foreground underline" href="/ref" target="_blank" rel="noreferrer">{url}</a>, choose the two teams, the court and the category, then enter players, toss and scoring as usual. Per-match referee links keep working too.
+        </p>
+        <p className="mt-1 text-sm">
+          {q.data?.configured ? <>Current username: <b>{q.data.username}</b>{q.data.source === "env" && " (from server environment)"}</> : <span className="text-amber-500">Not set yet: referees can't sign in until you set a password.</span>}
+        </p>
+      </div>
+      <Field label="Username"><Input value={username} placeholder={q.data?.username ?? "referee"} onChange={(e) => setUsername(e.target.value)} autoComplete="off" /></Field>
+      <Field label="New password" hint="At least 6 characters"><Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></Field>
+      <div className="flex flex-wrap gap-2 sm:col-span-2">
+        <Button disabled={busy || password.length < 6} onClick={async () => {
+          setBusy(true);
+          try {
+            await api.put("/api/admin/referee-login", { username: username.trim() || q.data?.username || "referee", password });
+            toast.success("Referee login saved. Share it with your referees.");
+            setPassword("");
+            await q.refetch();
+          } catch (e) {
+            toast.error(errorMessage(e));
+          } finally {
+            setBusy(false);
+          }
+        }}>Save referee login</Button>
+        <Button variant="outline" onClick={() => navigator.clipboard.writeText(url).then(() => toast.success("Referee sign-in link copied"))}>Copy sign-in link</Button>
+      </div>
+    </Card>
   );
 }

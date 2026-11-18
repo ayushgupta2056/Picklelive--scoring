@@ -3,6 +3,8 @@ import { Server } from "socket.io";
 import { prisma } from "./db";
 import { env } from "./env";
 import { tokenMatches } from "./tokens";
+import { parseCookieHeader } from "./auth";
+import { REF_COOKIE, refFromToken } from "./refSession";
 import { SOCKET, type MatchSummary, type TieSummary } from "@shared/api";
 import type { MatchState } from "@shared/scoring/types";
 
@@ -20,8 +22,17 @@ export function initRealtime(server: HttpServer) {
 
   io.on("connection", async (socket) => {
     // Referee sockets authenticate with their match-scoped token; everyone else is read-only.
-    const { refToken, matchId } = (socket.handshake.auth ?? {}) as { refToken?: string; matchId?: string };
-    if (refToken && matchId) {
+    const { refToken, matchId, session } = (socket.handshake.auth ?? {}) as { refToken?: string; matchId?: string; session?: boolean };
+    if (session && matchId && typeof matchId === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(matchId)) {
+      // Signed-in referee (shared login): authenticated by the httpOnly cookie sent with the handshake.
+      const who = refFromToken(parseCookieHeader(socket.handshake.headers.cookie)[REF_COOKIE]);
+      if (!who) {
+        socket.emit(SOCKET.refRevoked, { matchId });
+        socket.disconnect(true);
+        return;
+      }
+      socket.join(`match:${matchId}`);
+    } else if (refToken && matchId) {
       const m = await prisma.match.findUnique({ where: { id: String(matchId) }, select: { refTokenHash: true } });
       if (!m || !tokenMatches(String(refToken), m.refTokenHash)) {
         socket.emit(SOCKET.refRevoked, { matchId });

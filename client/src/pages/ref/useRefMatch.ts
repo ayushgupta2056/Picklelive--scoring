@@ -23,7 +23,9 @@ const qKey = (matchId: string) => `pl-queue-${matchId}`;
  * - on reconnect the full state is re-fetched.
  */
 export function useRefMatch(matchId: string, token: string) {
-  const headers = useMemo(() => ({ "x-ref-token": token }), [token]);
+  // No token = signed in with the shared referee login (httpOnly cookie) instead of a per-match link.
+  const sessionMode = !token;
+  const headers = useMemo((): Record<string, string> => (token ? { "x-ref-token": token } : {}), [token]);
   const [bundle, setBundle] = useState<RefBundle | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [queue, setQueue] = useState<QueuedEvent[]>([]);
@@ -115,7 +117,7 @@ export function useRefMatch(matchId: string, token: string) {
 
   // referee socket: authenticated with the match-scoped token
   useEffect(() => {
-    const s: Socket = io({ auth: { refToken: token, matchId }, transports: ["websocket", "polling"], reconnectionDelayMax: 4000 });
+    const s: Socket = io({ auth: token ? { refToken: token, matchId } : { matchId, session: true }, transports: ["websocket", "polling"], reconnectionDelayMax: 4000, withCredentials: true });
     s.on("connect", () => setNetOk(true));
     s.on("disconnect", () => setNetOk(false));
     s.io.on("reconnect", async () => {
@@ -170,5 +172,5 @@ export function useRefMatch(matchId: string, token: string) {
     [persist, flush],
   );
 
-  return { bundle, state, events, queue, queueLoaded, netOk, revoked, loadError, load, send, headers };
+  return { bundle, state, events, queue, queueLoaded, netOk, revoked, loadError, load, send, headers, sessionMode };
 }
