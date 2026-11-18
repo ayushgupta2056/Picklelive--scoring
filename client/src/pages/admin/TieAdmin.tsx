@@ -10,6 +10,7 @@ import { Field } from "@/components/ui/label";
 import { Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { SortableList } from "@/components/Sortable";
 import { ScoringConfigFields } from "@/components/ScoringConfigFields";
+import { FormatPicker } from "@/components/match/FormatPicker";
 import { LineupPicker, slotSize } from "@/components/match/LineupPicker";
 import { CategoryBadge, StatusPill, TeamChip } from "@/components/match/bits";
 import { QrDialog } from "@/components/public/Share";
@@ -123,6 +124,12 @@ function MatchPanel({ m, tie, slot, reload }: { m: MatchSummary; tie: TieSummary
         </div>
       </div>
 
+      {!started && !done && m.status !== "NOT_REQUIRED" && (
+        <div className="mb-3">
+          <FormatPicker matchId={m.id} bestOf={m.bestOf} pointsToWin={m.pointsToWin} scoringType={m.scoringType} onSaved={reload} compact />
+        </div>
+      )}
+      {started && <p className="mb-3 text-xs text-muted-foreground">{m.bestOf === 1 ? "1 game" : `Best of ${m.bestOf}`} to {m.pointsToWin} · {m.scoringType === "RALLY" ? "rally" : "side-out"} scoring</p>}
       {slot && (
         <div className="grid gap-4 lg:grid-cols-2">
           {slot.teams.map((tm) => <TeamLineup key={tm.teamId} matchId={m.id} info={tm} category={cat} disabled={started} reload={reload} blindHidden={false} />)}

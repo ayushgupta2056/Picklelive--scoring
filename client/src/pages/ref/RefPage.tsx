@@ -10,6 +10,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { CourtDiagram } from "@/components/match/CourtDiagram";
 import { slotSize } from "@/components/match/LineupPicker";
 import { LineupSelects } from "@/components/match/LineupSelects";
+import { FormatPicker } from "@/components/match/FormatPicker";
 import { NativeSelect } from "@/components/ui/input";
 import { AnimatedNumber, CategoryBadge, TeamChip } from "@/components/match/bits";
 import { api, errorMessage } from "@/lib/api";
@@ -216,10 +217,11 @@ function Wizard({ r, b }: { r: R; b: RefBundle }) {
         {step === 4 && pos && serving && (
           <>
             <h2 className="text-lg font-bold">Ready</h2>
+            <FormatPicker matchId={b.match.id} bestOf={b.config.bestOf} pointsToWin={b.config.pointsToWin} scoringType={b.config.scoringType} headers={r.headers} onSaved={() => r.load()} />
             <ul className="space-y-1 rounded-xl border p-4 text-sm">
               <li><b>{team(serving)?.name}</b> serves first from the right court: <b>{players.get(pos[serving].right)?.name}</b></li>
               <li><b>{team(nearTeam)?.name}</b> on your left, <b>{team(other(nearTeam))?.name}</b> on your right</li>
-              <li>{b.config.scoringType === "RALLY" ? "Rally" : "Side-out"} scoring · games to {b.config.pointsToWin} · best of {b.config.bestOf}</li>
+              <li>{b.config.scoringType === "RALLY" ? "Rally" : "Side-out"} scoring · {b.config.bestOf === 1 ? "1 game" : `best of ${b.config.bestOf} games`} to {b.config.pointsToWin}</li>
               <li>Opening call: <b className="tnum">{b.config.scoringType === "SIDE_OUT" && b.config.format === "DOUBLES" ? "0-0-2" : "0-0"}</b></li>
             </ul>
             <Button size="lg" className="h-20 w-full text-2xl font-black" onClick={start}>START MATCH</Button>
@@ -400,7 +402,7 @@ function Live({ r, b, st }: { r: R; b: RefBundle; st: MatchState }) {
       <Header b={b} st={st} />
       {/* score strip */}
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs text-muted-foreground">
-        <span className="font-semibold">Game {st.gameIndex + 1} of {st.config.bestOf}</span>
+        <span className="font-semibold">{st.config.bestOf === 1 ? `1 game to ${st.config.pointsToWin}` : `Game ${st.gameIndex + 1} of ${st.config.bestOf}`}</span>
         <span className="flex gap-2 tnum">
           {st.games.slice(0, st.gameIndex).map((x, i) => <span key={i} className="rounded bg-muted px-1.5 py-0.5 font-bold text-foreground">{x.a}-{x.b}</span>)}
         </span>

@@ -1,5 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { prisma } from "../db";
+import type { Prisma } from "@prisma/client";
 import { ah, HttpError, notFound } from "../errors";
 import { tokenMatches } from "../tokens";
 import { incomingEventSchema, lineupSchema } from "../validation";
@@ -7,7 +8,7 @@ import { appendEvent, audit } from "../services/matchService";
 import { broadcastMatch, saveLineup, setLineupLock, tieLineups } from "../services/lineupService";
 import { emitInvalidate } from "../realtime";
 import { z } from "zod";
-import { matchSummary, pubCategory, pubPlayer, pubTeam, pubTournament, stateOf, tieSummary } from "../services/serialize";
+import { resolveConfig, matchSummary, pubCategory, pubPlayer, pubTeam, pubTournament, stateOf, tieSummary } from "../services/serialize";
 import type { RefBundle } from "@shared/api";
 import type { EngineEvent, MatchConfig } from "@shared/scoring/types";
 import { getAdmin } from "../auth";
@@ -78,6 +79,23 @@ refRouter.put("/:matchId/court", refAuth, ah(async (req, res) => {
   await audit(res.locals.actor, "match.court", "Match", id, { from: m.court, to: court }, m.tournamentId);
   await broadcastMatch(id);
   emitInvalidate(m.tournamentId, "schedule");
+  res.json({ ok: true });
+}));
+
+/** Before the first serve, the referee (or admin) can set how many games and points the match is played to. */
+refRouter.put("/:matchId/format", refAuth, ah(async (req, res) => {
+  const id = String(req.params.matchId);
+  const body = z.object({ bestOf: z.union([z.literal(1), z.literal(3), z.literal(5)]), pointsToWin: z.union([z.literal(11), z.literal(15), z.literal(21)]).optional() }).parse(req.body);
+  const m = await prisma.match.findUniqueOrThrow({ where: { id }, include: { category: true } });
+  if (m.seq > 0) throw new HttpError(409, "The format can't change once the match has started");
+  const override = { ...((m.configOverride as object) ?? {}), ...body };
+  if (body.pointsToWin) {
+    // keep timeouts / switch-ends consistent with the new game length unless explicitly overridden elsewhere
+    Object.assign(override, { timeoutsPerGame: body.pointsToWin >= 21 ? 3 : 2, switchEndsAt: body.pointsToWin >= 21 ? 11 : body.pointsToWin >= 15 ? 8 : 6 });
+  }
+  await prisma.match.update({ where: { id }, data: { configOverride: override, config: resolveConfig(m.category, override) as unknown as Prisma.InputJsonValue } });
+  await audit(res.locals.actor, "match.format", "Match", id, body, m.tournamentId);
+  await broadcastMatch(id);
   res.json({ ok: true });
 }));
 

@@ -23,9 +23,9 @@ export function ScoringConfigFields({ value, onChange }: { value: Partial<MatchC
           <option value="">Default (11)</option><option value="11">11</option><option value="15">15</option><option value="21">21</option>
         </NativeSelect>
       </Field>
-      <Field label="Best of">
+      <Field label="Games (sets) per match">
         <NativeSelect value={value.bestOf ?? ""} onChange={(e) => set("bestOf", optNum(e.target.value) as MatchConfig["bestOf"])}>
-          <option value="">Default (3)</option><option value="1">1</option><option value="3">3</option><option value="5">5</option>
+          <option value="">Default (1)</option><option value="1">1</option><option value="3">3</option><option value="5">5</option>
         </NativeSelect>
       </Field>
       <Field label="Win by"><Input type="number" min={1} max={2} placeholder="2" value={value.winBy ?? ""} onChange={(e) => set("winBy", optNum(e.target.value))} /></Field>

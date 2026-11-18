@@ -135,6 +135,8 @@ export interface MatchSummary {
   lineupALocked: boolean;
   lineupBLocked: boolean;
   bestOf: number;
+  pointsToWin: number;
+  scoringType: "SIDE_OUT" | "RALLY";
   seq: number;
   updatedAt: string;
 }

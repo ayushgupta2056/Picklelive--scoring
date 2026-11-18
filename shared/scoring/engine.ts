@@ -13,7 +13,7 @@ export * from "./types";
 export const other = (s: Side): Side => (s === "A" ? "B" : "A");
 const key = (s: Side): "a" | "b" => (s === "A" ? "a" : "b");
 
-/** Sensible defaults for a config, following USA Pickleball conventions. */
+/** Defaults: one game to 11, side-out (serve) scoring, win by 2, following USA Pickleball conventions. */
 export function defaultConfig(partial: Partial<MatchConfig> = {}): MatchConfig {
   const pointsToWin = partial.pointsToWin ?? 11;
   const cfg: MatchConfig = {
@@ -21,7 +21,7 @@ export function defaultConfig(partial: Partial<MatchConfig> = {}): MatchConfig {
     pointsToWin,
     winBy: 2,
     pointCap: null,
-    bestOf: 3,
+    bestOf: 1,
     format: "DOUBLES",
     timeoutsPerGame: pointsToWin >= 21 ? 3 : 2,
     timeoutSeconds: 60,

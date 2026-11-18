@@ -36,7 +36,7 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
 
   // ---------- categories ----------
   await page.goto(`${base}/categories`);
-  const addCategory = async (name: string, code: string, gender: string, age?: string) => {
+  const addCategory = async (name: string, code: string, gender: string, age?: string, bestOf?: string) => {
     await page.getByRole("button", { name: "New category" }).click();
     const d = page.getByRole("dialog");
     await d.getByLabel("Name", { exact: true }).fill(name);
@@ -46,12 +46,15 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
       await d.getByLabel("Age rule").selectOption("UNDER");
       await d.getByLabel("Under age").fill(age);
     }
+    if (bestOf) await d.getByLabel("Games (sets) per match").selectOption(bestOf);
     await d.getByRole("button", { name: "Save category" }).click();
     await expect(d).toBeHidden();
   };
-  await addCategory("U18 Mixed Doubles", "U18X", "MIXED", "18");
+  await addCategory("U18 Mixed Doubles", "U18X", "MIXED", "18", "3"); // default is 1 game; this category plays best of 3
   await addCategory("Men's Doubles", "MD", "MALE");
   await expect(page.getByText("U18 Mixed Doubles")).toBeVisible();
+  await expect(page.getByText(/best of 3/)).toBeVisible();
+  await expect(page.getByText(/to 11, 1 game/)).toBeVisible(); // Men's Doubles keeps the new default
 
   // ---------- tie format ----------
   await page.goto(`${base}/formats`);
@@ -185,14 +188,14 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
 
   // ---------- admin enters the MD result → tie finished → standings update live ----------
   const panel2 = page.getByTestId("match-panel-2");
+  // default format: 1 game (set) to 11, selectable per match
+  await expect(panel2.getByRole("radiogroup", { name: "Games" }).getByRole("radio", { name: "1", exact: true })).toHaveAttribute("aria-checked", "true");
   await panel2.getByRole("button", { name: "Enter result" }).click();
   const sd = page.getByRole("dialog");
   await sd.getByLabel("Game 1 team A").fill("11");
   await sd.getByLabel("Game 1 team B").fill("5");
-  await sd.getByRole("button", { name: "Add game" }).click();
-  await sd.getByLabel("Game 2 team A").fill("11");
-  await sd.getByLabel("Game 2 team B").fill("7");
-  await sd.getByRole("button", { name: /Save: Alpha Aces win 2-0/ }).click();
+  await expect(sd.getByRole("button", { name: "Add game" })).toHaveCount(0); // one-game match
+  await sd.getByRole("button", { name: /Save: Alpha Aces win 1-0/ }).click();
 
   await expect(pubTie.getByTestId("tie-score-a")).toHaveText("2");
   await expect(pubTie.getByText("Alpha Aces win the tie")).toBeVisible();

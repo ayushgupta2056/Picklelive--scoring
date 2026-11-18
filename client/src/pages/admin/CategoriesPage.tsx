@@ -56,7 +56,7 @@ export default function CategoriesPage() {
               <div className="text-xs text-muted-foreground">
                 {c.format === "SINGLES" ? "Singles" : "Doubles"} · {genderLabel(c.genderRule)} · {describeAgeRule({ type: c.ageRuleType, min: c.ageMin, max: c.ageMax })}
                 {(c.skillMin != null || c.skillMax != null) && ` · DUPR ${c.skillMin ?? "–"}–${c.skillMax ?? "–"}`}
-                {" · "}{c.scoringConfig.scoringType === "RALLY" ? "rally" : "side-out"} to {c.scoringConfig.pointsToWin ?? 11}, best of {c.scoringConfig.bestOf ?? 3}
+                {" · "}{c.scoringConfig.scoringType === "RALLY" ? "rally" : "side-out"} to {c.scoringConfig.pointsToWin ?? 11}, {(c.scoringConfig.bestOf ?? 1) === 1 ? "1 game" : `best of ${c.scoringConfig.bestOf}`}
               </div>
             </div>
             <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => setEdit(c)}><Pencil /></Button>

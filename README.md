@@ -239,7 +239,7 @@ The viewing screens follow an OLED-dark "sports broadcast" style built with the 
 ## Defaults I chose
 
 - Timezone `Asia/Kolkata`; age cutoff Jan 1 of the tournament year.
-- Scoring defaults: side-out to 11, win by 2, best of 3, no point cap. Timeouts: 2 per game (3 for games to 21), 60 s each. Switch ends at 6 / 8 / 11 in the deciding game. Medical timeout: 15 minutes, once per player per match.
+- Scoring defaults: **one game (set) to 11**, side-out (serve) scoring, win by 2, no point cap. Change the number of games (1, best of 3, best of 5) and points (11/15/21) per category, or per match. Admins use the Games/Points picker on each match card; referees use the START step of the wizard. Either way, only before the first serve. Timeouts: 2 per game (3 for games to 21), 60 s each. Switch ends at 6 / 8 / 11 in the deciding game. Medical timeout: 15 minutes, once per player per match.
 - Tie points: win 2, draw 1, loss 0. Tiebreaks: tie points → head-to-head (mini-league among the tied teams) → match diff → game diff → point diff → points scored.
 - Tie formats: level tie plays the decider; stop early with remaining matches marked "not required"; max 2 categories per player per tie; pairs may not repeat.
 - Match slot 30 minutes, rest-gap warning under 15 minutes, 4 courts.

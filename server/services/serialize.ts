@@ -143,7 +143,9 @@ export function matchSummary(
     lineupB: lineup(lb),
     lineupALocked: !!la?.locked,
     lineupBLocked: !!lb?.locked,
-    bestOf: (m.config as unknown as MatchConfig)?.bestOf ?? 3,
+    bestOf: (m.config as unknown as MatchConfig)?.bestOf ?? 1,
+    pointsToWin: (m.config as unknown as MatchConfig)?.pointsToWin ?? 11,
+    scoringType: (m.config as unknown as MatchConfig)?.scoringType ?? "SIDE_OUT",
     seq: m.seq,
     updatedAt: m.updatedAt.toISOString(),
   };
