@@ -351,16 +351,11 @@ function Live({ r, b, st }: { r: R; b: RefBundle; st: MatchState }) {
   const g = st.games[st.gameIndex];
   const now = useNow(!!st.activeTimeout);
 
-  const act = (ev: EngineEvent, label: string, kind: "point" | "sideout" | "game" | "undo" = "point") => {
+  // No pop-up after each action: the big UNDO button on screen is the way to correct a tap.
+  const act = (ev: EngineEvent, _label: string, kind: "point" | "sideout" | "game" | "undo" = "point") => {
     if (!r.send(ev)) return;
     vibrate(kind === "game" ? [40, 60, 40] : 25);
     if (sound) beep(kind);
-    if (ev.type !== "UNDO") {
-      toast(label, {
-        duration: 3000,
-        action: { label: "Undo", onClick: () => r.send({ type: "UNDO" }) },
-      });
-    }
   };
 
   const rally = (winner: Side) => {
