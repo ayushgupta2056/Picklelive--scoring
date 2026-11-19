@@ -37,7 +37,7 @@ export default function Dashboard() {
               const tie = lk.ties.get(m.tieId)!;
               return (
                 <li key={m.id}>
-                  <Link to={`${base}/ties/${tie.id}`} className="flex items-center gap-2 rounded-xl border p-3 hover:bg-accent/40">
+                  <Link to={`/t/${t.slug}/match/${m.id}`} target="_blank" className="flex items-center gap-2 rounded-xl border p-3 hover:bg-accent/40">
                     <CategoryBadge category={lk.categories.get(m.categoryId)} />
                     <TeamChip team={lk.teams.get(tie.teamAId ?? "")} size="sm" />
                     <b className="tnum">{m.live?.score.a}-{m.live?.score.b}</b>

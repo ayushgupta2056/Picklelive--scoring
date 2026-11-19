@@ -8,8 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { CourtDiagram } from "@/components/match/CourtDiagram";
-import { slotSize } from "@/components/match/LineupPicker";
-import { LineupSelects } from "@/components/match/LineupSelects";
+import { PlayerSearch } from "@/components/match/PlayerSearch";
 import { FormatPicker } from "@/components/match/FormatPicker";
 import { NativeSelect } from "@/components/ui/input";
 import { AnimatedNumber, CategoryBadge, TeamChip } from "@/components/match/bits";
@@ -17,7 +16,7 @@ import { api, errorMessage } from "@/lib/api";
 import { beep, useWakeLock, vibrate } from "@/lib/feedback";
 import { cn, contrastText } from "@/lib/utils";
 import { previewRally } from "@shared/scoring/engine";
-import type { EngineEvent, MatchState, Side, TeamPositions } from "@shared/scoring/types";
+import type { EngineEvent, MatchState, Side } from "@shared/scoring/types";
 import type { PublicPlayer, PublicTeam, RefBundle } from "@shared/api";
 import { useRefMatch } from "./useRefMatch";
 
@@ -114,193 +113,193 @@ function Header({ b, st }: { b: RefBundle; st?: MatchState }) {
   );
 }
 
-// ------------------------------------------------------------------ wizard
+// ------------------------------------------------------------------ setup (one simple screen)
 
+/**
+ * Pre-match setup on ONE screen, in plain language for non-technical referees:
+ * 1) who is playing (dropdowns), 2) who serves first (two big buttons), 3) where they stand (mini court with swap
+ * buttons). Court and format are prefilled. START saves lineups, locks them and begins the match in one tap.
+ */
 function Wizard({ r, b }: { r: R; b: RefBundle }) {
-  const [step, setStep] = useState(0);
-  const [tossWinner, setTossWinner] = useState<Side | null>(null);
-  const [tossChoice, setTossChoice] = useState<"SERVE" | "RECEIVE" | "END" | null>(null);
-  const [firstServer, setFirstServer] = useState<Side | null>(null);
-  const [nearTeam, setNearTeam] = useState<Side>("A");
-  const lineupA = b.lineups.teams.find((t) => t.side === "A");
-  const lineupB = b.lineups.teams.find((t) => t.side === "B");
-  const [pos, setPos] = useState<{ A: TeamPositions; B: TeamPositions } | null>(null);
-  const players = new Map(b.players.map((p) => [p.id, p]));
-  const bothIn = !!lineupA?.submitted && !!lineupB?.submitted;
-
-  useEffect(() => {
-    if (lineupA?.submitted && lineupB?.submitted) {
-      const mk = (ids: string[]) => ({ right: ids[0], left: ids[1] ?? null });
-      setPos((p) => p ?? { A: mk(lineupA.playerIds), B: mk(lineupB.playerIds) });
-    }
-  }, [lineupA, lineupB]);
-
-  const serving: Side | null = tossChoice === "SERVE" ? tossWinner : tossChoice === "RECEIVE" && tossWinner ? other(tossWinner) : firstServer;
+  const doubles = b.config.format === "DOUBLES";
+  const need = doubles ? 2 : 1;
+  const info = (s: Side) => b.lineups.teams.find((t) => t.side === s);
   const team = (s: Side) => (s === "A" ? b.teamA : b.teamB);
-  const steps = ["Lineups & court", "Coin toss", "Sides", "Positions", "Start"];
+  const players = useMemo(() => new Map(b.players.map((p) => [p.id, p])), [b.players]);
+  // Nothing prefilled: the referee picks every player (only an already-locked lineup is shown as is).
+  const [sel, setSel] = useState<{ A: string[]; B: string[] }>(() => ({ A: info("A")?.locked ? info("A")!.playerIds : [], B: info("B")?.locked ? info("B")!.playerIds : [] }));
+  const [server, setServer] = useState<Side | null>(null);
+  const [leftTeam, setLeftTeam] = useState<Side>("A");
+  const [firstIsRight, setFirstIsRight] = useState<{ A: boolean; B: boolean }>({ A: true, B: true });
+  const [court, setCourt] = useState(b.match.court ?? "");
+  const [showFormat, setShowFormat] = useState(false);
+  const [working, setWorking] = useState(false);
+
+  const picked = (s: Side) => sel[s].filter(Boolean);
+  const complete = (s: Side) => picked(s).length === need && new Set(picked(s)).size === need;
+  const missing = [
+    !complete("A") && `${team("A")?.code} players`,
+    !complete("B") && `${team("B")?.code} players`,
+    !server && "who serves first",
+    !court && "court",
+  ].filter(Boolean) as string[];
+  const name = (id?: string) => (id ? players.get(id)?.name ?? "?" : "—");
+  const rightOf = (s: Side) => (doubles ? (firstIsRight[s] ? picked(s)[0] : picked(s)[1]) : picked(s)[0]);
+  const leftOf = (s: Side) => (doubles ? (firstIsRight[s] ? picked(s)[1] : picked(s)[0]) : undefined);
 
   const start = async () => {
-    if (!pos || !serving) return;
-    const ok = r.send({ type: "SETUP", payload: { firstServingTeam: serving, positions: pos, teamAEnd: nearTeam === "A" ? "NEAR" : "FAR", coinTossWinner: tossWinner ?? undefined, coinTossChoice: tossChoice ?? undefined } });
-    if (ok) vibrate([30, 40, 30]);
+    if (missing.length || !server) return;
+    setWorking(true);
+    try {
+      if (court !== b.match.court) await api.put(`/api/ref/${b.match.id}/court`, { court }, r.headers);
+      for (const s of ["A", "B"] as Side[]) {
+        const i = info(s)!;
+        const ids = picked(s);
+        if (!i.locked && (!i.submitted || ids.join() !== i.playerIds.join())) await api.put(`/api/ref/${b.match.id}/lineup`, { teamId: i.teamId, playerIds: ids }, r.headers);
+      }
+      if (!info("A")?.locked || !info("B")?.locked) await api.post(`/api/ref/${b.match.id}/lineups/lock`, {}, r.headers);
+      const fresh = await r.load();
+      if (!fresh) return;
+      const ok = r.send({
+        type: "SETUP",
+        payload: {
+          firstServingTeam: server,
+          positions: { A: { right: rightOf("A")!, left: leftOf("A") ?? null }, B: { right: rightOf("B")!, left: leftOf("B") ?? null } },
+          teamAEnd: leftTeam === "A" ? "NEAR" : "FAR",
+        },
+      });
+      if (ok) vibrate([30, 40, 30]);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const rightTeam: Side = leftTeam === "A" ? "B" : "A";
+  // Team on the left faces right → its right court is the bottom box; team on the right → its right court is the top box.
+  const box = (s: Side, onLeft: boolean) => {
+    const t = team(s);
+    const color = t?.color ?? "#444";
+    const rows = onLeft ? [leftOf(s), rightOf(s)] : [rightOf(s), leftOf(s)];
+    const courts = onLeft ? ["L", "R"] : ["R", "L"];
+    return (
+      <div className="grid grid-rows-2" style={{ background: `${color}2E` }}>
+        {rows.map((id, i) => (
+          <div key={i} className={cn("relative flex min-h-16 items-center justify-center p-2 text-center", i === 0 && "border-b-2 border-white/50")}>
+            {(doubles || courts[i] === "R") && (
+              <span className={cn("rounded-lg px-2 py-1 text-sm font-bold", server === s && courts[i] === "R" && "ring-4 ring-lime")} style={{ background: color, color: contrastText(color) }}>
+                {name(id)}
+              </span>
+            )}
+            <span className={cn("absolute bottom-1 text-[10px] font-black text-white/50", onLeft ? "left-1.5" : "right-1.5")}>{courts[i] === "R" ? "RIGHT" : "LEFT"}</span>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-xl pb-40">
       <Header b={b} />
-      <div className="px-4 pt-4">
-        <h1 className="text-xl font-black">
-          <TeamChip team={b.teamA} /> <span className="mx-1 text-muted-foreground">vs</span> <TeamChip team={b.teamB} />
-        </h1>
-        <ol className="mt-3 flex gap-1" aria-label="Steps">
-          {steps.map((s, i) => (
-            <li key={s} className={cn("h-1.5 flex-1 rounded-full", i <= step ? "bg-lime" : "bg-muted")} aria-current={i === step ? "step" : undefined}>
-              <span className="sr-only">{s}</span>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-2 text-sm font-semibold text-muted-foreground">Step {step + 1} of {steps.length} · {steps[step]}</p>
-      </div>
-
-      <div className="space-y-4 p-4">
+      <div className="space-y-6 p-4">
         {b.busy && (
           <div role="alert" className="flex gap-2 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm font-semibold text-amber-600 dark:text-amber-300" data-testid="busy-warning">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> <span>{b.busy} You can enter lineups now, but the match can't start yet.</span>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> <span>{b.busy}</span>
           </div>
         )}
-        {step === 0 && (
-          <>
-            <CourtSelect r={r} b={b} />
-            {[lineupA, lineupB].map((l) => l && <RefLineup key={l.side} r={r} b={b} side={l.side} />)}
-            <Button size="lg" className="h-16 w-full text-lg" disabled={!bothIn} onClick={async () => {
-              try {
-                await api.post(`/api/ref/${b.match.id}/lineups/lock`, {}, r.headers);
-                await r.load();
-                setStep(1);
-              } catch (e) {
-                toast.error(errorMessage(e));
-              }
-            }}>
-              <Lock /> Confirm &amp; lock lineups
-            </Button>
-            {!bothIn && <p className="text-center text-sm text-muted-foreground">Both teams must submit a lineup before the match can start.</p>}
-          </>
-        )}
-        {step === 1 && (
-          <>
-            <h2 className="text-lg font-bold">Who won the coin toss?</h2>
-            <TwoTeams b={b} value={tossWinner} onChange={setTossWinner} />
-            {tossWinner && (
-              <>
-                <h2 className="text-lg font-bold">{team(tossWinner)?.name} chooses…</h2>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["SERVE", "RECEIVE", "END"] as const).map((c) => (
-                    <BigChoice key={c} active={tossChoice === c} onClick={() => setTossChoice(c)}>{c === "END" ? "Choose end" : c === "SERVE" ? "Serve" : "Receive"}</BigChoice>
-                  ))}
-                </div>
-              </>
-            )}
-            {tossChoice === "END" && (
-              <>
-                <h2 className="text-lg font-bold">{team(other(tossWinner!))?.name} picks — who serves first?</h2>
-                <TwoTeams b={b} value={firstServer} onChange={setFirstServer} />
-              </>
-            )}
-            <Nav onBack={() => setStep(0)} onNext={() => setStep(2)} nextDisabled={!serving} />
-          </>
-        )}
-        {step === 2 && (
-          <>
-            <h2 className="text-lg font-bold">Standing at the net post, which team is on your LEFT?</h2>
-            <TwoTeams b={b} value={nearTeam} onChange={(s) => setNearTeam(s)} />
-            <Nav onBack={() => setStep(1)} onNext={() => setStep(3)} />
-          </>
-        )}
-        {step === 3 && pos && (
-          <>
-            <h2 className="text-lg font-bold">{b.config.format === "DOUBLES" ? "Who starts in the RIGHT court?" : "Players"}</h2>
-            {(["A", "B"] as Side[]).map((s) => (
-              <div key={s} className="rounded-xl border p-3">
-                <div className="mb-2 flex items-center gap-2 font-semibold"><TeamChip team={team(s)} /> {team(s)?.name}{serving === s && <span className="ml-auto text-xs font-black uppercase text-lime-accent">serves first</span>}</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <PosBox label="Left court" name={pos[s].left ? players.get(pos[s].left!)?.name : "—"} />
-                  <PosBox label="Right court" name={players.get(pos[s].right)?.name} highlight />
-                </div>
-                {b.config.format === "DOUBLES" && (
-                  <Button variant="secondary" className="mt-2 w-full" onClick={() => setPos((p) => p && { ...p, [s]: { right: p[s].left!, left: p[s].right } })}>
-                    <ArrowLeftRight /> Swap sides
+
+        <SetupStep n={1} title="Who is playing?">
+          <div className="grid gap-3">
+            {(["A", "B"] as Side[]).map((s) => {
+              const i = info(s);
+              if (!i) return null;
+              return (
+                <section key={s} className="rounded-2xl border p-3" aria-label={`${team(s)?.name} players`}>
+                  <div className="mb-2 flex items-center gap-2 font-semibold"><TeamChip team={team(s)} /> {team(s)?.name}{i.locked && <Lock className="ml-auto h-4 w-4 text-muted-foreground" aria-label="locked" />}</div>
+                  {i.locked ? (
+                    <p className="text-lg font-bold">{i.playerIds.map((id) => name(id)).join(" & ")}</p>
+                  ) : (
+                    <PlayerSearch roster={i.roster} category={b.category} value={sel[s]} onChange={(ids) => setSel((x) => ({ ...x, [s]: ids }))} teamCode={team(s)?.code} />
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        </SetupStep>
+
+        <SetupStep n={2} title="Who serves first?">
+          <TwoTeams b={b} value={server} onChange={setServer} />
+          <p className="mt-2 text-sm text-muted-foreground">Toss winner chooses. The first server starts from the <b>right</b> court.</p>
+        </SetupStep>
+
+        <SetupStep n={3} title="Where are they standing?">
+          <p className="mb-2 text-sm text-muted-foreground">As you see the court from your chair at the net.</p>
+          <div className="grid grid-cols-[1fr_10px_1fr] overflow-hidden rounded-xl border-4 border-white/80 bg-[#1e3a8a]" data-testid="setup-court">
+            {box(leftTeam, true)}
+            <div className="bg-white/90" aria-hidden />
+            {box(rightTeam, false)}
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <Button variant="outline" className="h-12" onClick={() => setLeftTeam(rightTeam)}><ArrowLeftRight /> Swap sides</Button>
+            {doubles ? (
+              <div className="grid grid-cols-2 gap-2">
+                {(["A", "B"] as Side[]).map((s) => (
+                  <Button key={s} variant="outline" className="h-12 px-2" disabled={picked(s).length < 2} onClick={() => setFirstIsRight((x) => ({ ...x, [s]: !x[s] }))} aria-label={`Swap ${team(s)?.name} players`}>
+                    <ArrowLeftRight /> {team(s)?.code}
                   </Button>
-                )}
+                ))}
               </div>
-            ))}
-            <Nav onBack={() => setStep(2)} onNext={() => setStep(4)} />
-          </>
-        )}
-        {step === 4 && pos && serving && (
-          <>
-            <h2 className="text-lg font-bold">Ready</h2>
-            <FormatPicker matchId={b.match.id} bestOf={b.config.bestOf} pointsToWin={b.config.pointsToWin} scoringType={b.config.scoringType} headers={r.headers} onSaved={() => r.load()} />
-            <ul className="space-y-1 rounded-xl border p-4 text-sm">
-              <li><b>{team(serving)?.name}</b> serves first from the right court: <b>{players.get(pos[serving].right)?.name}</b></li>
-              <li><b>{team(nearTeam)?.name}</b> on your left, <b>{team(other(nearTeam))?.name}</b> on your right</li>
-              <li>{b.config.scoringType === "RALLY" ? "Rally" : "Side-out"} scoring · {b.config.bestOf === 1 ? "1 game" : `best of ${b.config.bestOf} games`} to {b.config.pointsToWin}</li>
-              <li>Opening call: <b className="tnum">{b.config.scoringType === "SIDE_OUT" && b.config.format === "DOUBLES" ? "0-0-2" : "0-0"}</b></li>
-            </ul>
-            <Button size="lg" className="h-20 w-full text-2xl font-black" onClick={start} disabled={!!b.busy}>START MATCH</Button>
-            <Button variant="ghost" className="w-full" onClick={() => setStep(3)}>Back</Button>
-          </>
-        )}
+            ) : <span />}
+          </div>
+        </SetupStep>
+
+        <section className="space-y-3 rounded-2xl border p-3 text-sm">
+          <div className="flex items-center gap-3">
+            <span className="w-16 font-semibold">Court</span>
+            {b.match.court ? <span className="flex-1 text-base font-bold" data-testid="court-chosen">{b.match.court}</span> : <NativeSelect value={court} onChange={(e) => setCourt(e.target.value)} className="h-12 flex-1" data-testid="court-select" aria-label="Court">
+              <option value="" disabled>Select court…</option>
+              {b.tournament.courtNames.map((c) => <option key={c} value={c}>{c}</option>)}
+            </NativeSelect>}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="w-16 font-semibold">Format</span>
+            <span className="flex-1">{b.config.bestOf === 1 ? "1 game" : `Best of ${b.config.bestOf} games`} to {b.config.pointsToWin} · {b.config.scoringType === "RALLY" ? "rally" : "side-out"} scoring</span>
+            <Button variant="ghost" size="sm" onClick={() => setShowFormat((v) => !v)}>{showFormat ? "Done" : "Change"}</Button>
+          </div>
+          {showFormat && <FormatPicker matchId={b.match.id} bestOf={b.config.bestOf} pointsToWin={b.config.pointsToWin} scoringType={b.config.scoringType} headers={r.headers} onSaved={() => r.load()} compact />}
+        </section>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+        <div className="mx-auto max-w-xl">
+          <Button size="lg" className="h-20 w-full text-2xl font-black" onClick={start} disabled={working || missing.length > 0 || !!b.busy} data-testid="start-match">
+            {working && <Loader2 className="animate-spin" />} START MATCH
+          </Button>
+          <p className="mt-1 text-center text-sm text-muted-foreground" aria-live="polite">
+            {b.busy ? "Waiting for the other tie to finish" : missing.length ? `Still needed: ${missing.join(", ")}` : `${team(server!)?.name} serves first · call "${b.config.scoringType === "SIDE_OUT" && doubles ? "0-0-2" : "0-0"}"`}
+          </p>
+        </div>
       </div>
     </div>
   );
 }
 
-function CourtSelect({ r, b }: { r: R; b: RefBundle }) {
-  const [busy, setBusy] = useState(false);
+function SetupStep({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border p-3">
-      <label htmlFor="court" className="mb-2 block font-semibold">Court</label>
-      <NativeSelect id="court" className="h-14 text-base" value={b.match.court ?? ""} disabled={busy} data-testid="court-select" onChange={async (e) => {
-        setBusy(true);
-        try {
-          await api.put(`/api/ref/${b.match.id}/court`, { court: e.target.value }, r.headers);
-          await r.load();
-          toast.success(`Court set to ${e.target.value}`);
-        } catch (err) {
-          toast.error(errorMessage(err));
-        } finally {
-          setBusy(false);
-        }
-      }}>
-        <option value="" disabled>Select court…</option>
-        {b.tournament.courtNames.map((c) => <option key={c} value={c}>{c}</option>)}
-      </NativeSelect>
+    <section aria-label={title}>
+      <h2 className="mb-2 flex items-center gap-2 font-display text-xl font-bold uppercase tracking-wide">
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-lime text-base text-black">{n}</span> {title}
+      </h2>
+      {children}
     </section>
-  );
-}
-
-function PosBox({ label, name, highlight }: { label: string; name?: string; highlight?: boolean }) {
-  return (
-    <div className={cn("rounded-lg border p-3 text-center", highlight && "border-lime")}>
-      <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 font-bold">{name ?? "—"}</div>
-    </div>
-  );
-}
-
-function Nav({ onBack, onNext, nextDisabled }: { onBack: () => void; onNext: () => void; nextDisabled?: boolean }) {
-  return (
-    <div className="grid grid-cols-2 gap-2 pt-2">
-      <Button variant="outline" size="lg" onClick={onBack}>Back</Button>
-      <Button size="lg" onClick={onNext} disabled={nextDisabled}>Next</Button>
-    </div>
   );
 }
 
 function BigChoice({ active, onClick, children, style }: { active?: boolean; onClick: () => void; children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <button type="button" onClick={onClick} aria-pressed={active} style={style}
-      className={cn("min-h-16 rounded-xl border-2 p-3 text-base font-bold transition-colors", active ? "border-lime bg-lime/10" : "border-border hover:bg-accent")}>
+      className={cn("min-h-20 rounded-xl border-2 p-3 text-base font-bold transition-colors", active ? "border-lime bg-lime/10" : "border-border hover:bg-accent")}>
       {children}
     </button>
   );
@@ -313,53 +312,11 @@ function TwoTeams({ b, value, onChange }: { b: RefBundle; value: Side | null; on
         const t = s === "A" ? b.teamA : b.teamB;
         return (
           <BigChoice key={s} active={value === s} onClick={() => onChange(s)}>
-            <span className="flex flex-col items-center gap-1"><TeamChip team={t} size="lg" /> <span className="text-sm">{t?.name}</span></span>
+            <span className="flex flex-col items-center gap-1" data-testid={`serve-${s}`}><TeamChip team={t} size="lg" /> <span className="text-sm">{t?.name}</span></span>
           </BigChoice>
         );
       })}
     </div>
-  );
-}
-
-function RefLineup({ r, b, side }: { r: R; b: RefBundle; side: Side }) {
-  const info = b.lineups.teams.find((t) => t.side === side)!;
-  const team = side === "A" ? b.teamA : b.teamB;
-  const [editing, setEditing] = useState(!info.submitted);
-  const [sel, setSel] = useState<string[]>(info.playerIds);
-  const [busy, setBusy] = useState(false);
-  const need = slotSize(b.category);
-  const names = info.playerIds.map((id) => info.roster.find((p) => p.id === id)?.name ?? "?");
-  const submit = async () => {
-    setBusy(true);
-    try {
-      await api.put(`/api/ref/${b.match.id}/lineup`, { teamId: info.teamId, playerIds: sel }, r.headers);
-      toast.success(`${team?.code} lineup saved`);
-      await r.load();
-      setEditing(false);
-    } catch (e) {
-      toast.error(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="rounded-xl border p-3" aria-label={`${team?.name} lineup`}>
-      <div className="mb-2 flex items-center gap-2">
-        <TeamChip team={team} />
-        <span className="font-semibold">{team?.name}</span>
-        {info.locked ? <span className="ml-auto flex items-center gap-1 text-xs font-bold text-muted-foreground"><Lock className="h-3 w-3" /> Locked</span>
-          : info.submitted && !editing ? <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setEditing(true)}>Change</Button> : null}
-      </div>
-      {info.submitted && !editing ? (
-        <p className="flex items-center gap-2 text-base font-bold"><CheckCircle2 className="h-5 w-5 text-lime-accent" /> {names.join(" & ")}</p>
-      ) : (
-        <>
-          <p className="mb-2 text-sm text-muted-foreground">Select {need} player{need > 1 ? "s" : ""} from the {team?.code} roster. Ineligible players are greyed out with the reason.</p>
-          <LineupSelects roster={info.roster} category={b.category} value={sel} onChange={setSel} teamCode={team?.code} />
-          <Button className="mt-3 w-full" size="lg" disabled={sel.filter(Boolean).length !== need || busy} onClick={submit}>{busy && <Loader2 className="animate-spin" />} Submit lineup</Button>
-        </>
-      )}
-    </section>
   );
 }
 
@@ -466,7 +423,7 @@ function Live({ r, b, st }: { r: R; b: RefBundle; st: MatchState }) {
         <div className="col-span-2 grid grid-cols-2 gap-2">
           {(["A", "B"] as Side[]).map((s) => (
             <Button key={s} variant="outline" className="h-12" onClick={() => act({ type: "TIMEOUT", payload: { team: s } }, `Timeout ${team(s)?.code}`)} disabled={st.timeoutsUsed[s] >= st.config.timeoutsPerGame}>
-              <Clock /> TO {team(s)?.code} ({st.config.timeoutsPerGame - st.timeoutsUsed[s]} left)
+              <Clock /> Timeout {team(s)?.code} · {st.config.timeoutsPerGame - st.timeoutsUsed[s]} left
             </Button>
           ))}
         </div>

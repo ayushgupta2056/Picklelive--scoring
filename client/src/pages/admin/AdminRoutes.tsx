@@ -3,7 +3,7 @@ import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams } from "
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  CalendarRange, ChevronLeft, ExternalLink, FileClock, Gauge, LayoutGrid, ListChecks, LogOut, Menu, Monitor, Moon, Settings, Shapes, Sun, Swords, Trophy, Users, UserRound, Plus,
+  CalendarRange, ChevronLeft, ExternalLink, FileClock, Gauge, LayoutGrid, ListChecks, LogOut, Menu, Monitor, Moon, Settings, Shapes, Sun, Trophy, Users, UserRound, Plus,
 } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
 import { useTheme } from "@/hooks/useTheme";
@@ -26,8 +26,6 @@ const FormatsPage = lazy(() => import("./FormatsPage"));
 const TeamsAdmin = lazy(() => import("./TeamsAdmin"));
 const PlayersAdmin = lazy(() => import("./PlayersAdmin"));
 const StagesPage = lazy(() => import("./StagesPage"));
-const TiesPage = lazy(() => import("./TiesPage"));
-const TieAdmin = lazy(() => import("./TieAdmin"));
 const SchedulePage = lazy(() => import("./ScheduleBoard"));
 const DisplayPage = lazy(() => import("./DisplayPage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
@@ -159,7 +157,6 @@ const NAV = [
   { to: "teams", label: "Teams", icon: Users },
   { to: "players", label: "Players", icon: UserRound },
   { to: "stages", label: "Stages", icon: LayoutGrid },
-  { to: "ties", label: "Ties & lineups", icon: Swords },
   { to: "schedule", label: "Schedule", icon: CalendarRange },
   { to: "display", label: "Big display", icon: Monitor },
   { to: "settings", label: "Settings", icon: Settings },
@@ -218,8 +215,6 @@ function TournamentShell({ bare, children }: { bare?: boolean; children?: React.
                 <Route path="teams" element={<TeamsAdmin />} />
                 <Route path="players" element={<PlayersAdmin />} />
                 <Route path="stages" element={<StagesPage />} />
-                <Route path="ties" element={<TiesPage />} />
-                <Route path="ties/:tieId" element={<TieAdmin />} />
                 <Route path="schedule" element={<SchedulePage />} />
                 <Route path="display" element={<DisplayPage />} />
                 <Route path="settings" element={<SettingsPage />} />

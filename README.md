@@ -26,12 +26,13 @@ One Render web service (Node 20 + Express + Socket.IO, which also serves the Rea
 
 **Access levels**
 - **Admin** (`/admin`): email and password from env (bcrypt), JWT in an httpOnly cookie. Full control.
-- **Referee: shared login** (`/ref`): **one username and password for all referees**, set in Admin → Settings → Referee login (or the `REF_USERNAME` / `REF_PASSWORD` env vars). After signing in, a referee:
-  1. picks **Team A vs Team B** (or starts an extra tie if they don't have one);
-  2. picks the **court** and the **category** match;
-  3. continues in the normal wizard: players from roster dropdowns, toss, sides, positions, games (sets) and points, then scoring.
-
-  A signed-in referee can score any match.
+- **Referee: shared login** (`/ref`): **one username and password for all referees**, and many referees can be signed in at once on different phones. It's set in Admin → Settings → Referee login, or with the `REF_USERNAME` / `REF_PASSWORD` env vars. Nothing is prefilled; the referee goes step by step:
+  1. **Which two teams** are playing.
+  2. **Which court.**
+  3. **Which category** (U18 Mixed, Men's Doubles…).
+  4. **Who is playing:** a type-to-search box per player (type "a" and every matching player appears). Ineligible players are shown greyed out with the reason.
+  5. **Who serves first**, and **where they're standing** (a mini court with Swap buttons). The format is 1 game to 11 unless changed.
+  6. **START MATCH.** That one tap saves and locks the lineups, then begins scoring.
 - **Referee: per-match link** (`/ref/:matchId?token=…`): a random 32-character token per match. It is stored hashed (plus an encrypted copy so the admin can show the link again). It works for that one match only. The admin can copy it, show a QR code, regenerate it or revoke it. Revoking disconnects the referee's socket instantly.
 - **Public** (`/t/:slug`): live home, schedule, standings, brackets, teams, players and category leaders. Also `/t/:slug/tie/:id`, `/t/:slug/match/:id` and the big-screen `/t/:slug/tv`.
 
@@ -52,7 +53,7 @@ One Render web service (Node 20 + Express + Socket.IO, which also serves the Rea
 - The schedule board flags a team booked into overlapping ties.
 - Auto-schedule never starts a team's next tie before its previous tie ends. Knockout rounds wait for the ties that feed them.
 
-**Lineups at match time**
+**Lineups at match time** (entered by the referee on court; the admin no longer has a separate Ties & lineups page)
 - For each slot, pick players from that team's roster (uploaded once by the admin). Ineligible players are greyed out with the reason, such as "Over 17 on cutoff date", "Mixed needs 1M + 1F", "Already used in 2 categories this tie" or "Not in roster".
 - The admin can force an override with a mandatory reason, which goes to the audit log.
 - The referee enters lineups from **dropdowns**, one per player spot, and picks the **court**.

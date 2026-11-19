@@ -18,6 +18,11 @@ async function rally(ref: Page, side: "A" | "B", times: number) {
   }
 }
 const call = (ref: Page) => ref.getByTestId("score-call");
+/** Type part of a name into a player search box and pick the player from the list. */
+async function pickPlayer(p: Page, box: string, typed: string, name: RegExp) {
+  await p.getByTestId(box).fill(typed);
+  await p.getByRole("option", { name }).click();
+}
 
 test("match day: setup → lineups → ref scoring → live public updates", async ({ page, browser }) => {
   // ---------- admin: login + tournament ----------
@@ -111,30 +116,12 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
   await page.getByRole("dialog").getByRole("button", { name: "Generate" }).click();
   await expect(page.getByText("1 ties")).toBeVisible();
 
-  // ---------- lineups: ineligible players blocked ----------
-  await page.goto(`${base}/ties`);
-  await page.locator('a[href*="/ties/"]').first().click();
-  const panel1 = page.getByTestId("match-panel-1");
-  const aaa = panel1.getByTestId("lineup-AAA");
-  const adult = aaa.getByRole("option", { name: /Abe Adult/ });
-  await expect(adult).toHaveAttribute("aria-disabled", "true");
-  await expect(adult).toContainText("Over 17 on cutoff date");
-  await aaa.getByRole("option", { name: /Arun Kid/ }).click();
-  // picking a second boy for mixed is blocked
-  await expect(aaa.getByRole("option", { name: /Abe Adult/ })).toContainText("Mixed needs 1M + 1F");
-  await aaa.getByRole("option", { name: /Asha Kid/ }).click();
-  await aaa.getByRole("button", { name: "Submit lineup" }).click();
-  await expect(aaa.getByRole("button", { name: "Lock" })).toBeVisible();
-  const bbb = panel1.getByTestId("lineup-BBB");
-  await bbb.getByRole("option", { name: /Ben Kid/ }).click();
-  await bbb.getByRole("option", { name: /Bea Kid/ }).click();
-  await bbb.getByRole("button", { name: "Submit lineup" }).click();
-  await expect(bbb.getByRole("button", { name: "Lock" })).toBeVisible();
-
-  // referee link for slot 1 (what "Copy ref link" copies)
-  const tieId = page.url().split("/ties/")[1];
-  const tie = await (await page.request.get(`/api/admin/ties/${tieId}`)).json();
-  const matchId = tie.tie.matches[0].id as string;
+  // ---------- the tie and a per-match referee link (links still work alongside the shared login) ----------
+  const tournamentId = base.split("/admin/t/")[1];
+  const adminBundle = await (await page.request.get(`/api/admin/tournaments/${tournamentId}/bundle`)).json();
+  const theTie = adminBundle.ties[0];
+  const tieId = theTie.id as string;
+  const matchId = theTie.matches[0].id as string;
   const { refPath } = await (await page.request.get(`/api/admin/matches/${matchId}`)).json();
   expect(refPath).toMatch(/^\/ref\/.+\?token=[A-Za-z0-9]{32}$/);
 
@@ -147,18 +134,26 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
   await pubStand.goto(`/t/${slug}/standings`);
   await expect(pubStand.getByTestId("standing-AAA")).toHaveAttribute("data-points", "0");
 
-  // ---------- referee on a phone ----------
+  // ---------- referee on a phone: ONE simple setup screen ----------
   const phone = await browser.newContext({ ...devices["Pixel 7"] });
   const ref = await phone.newPage();
   await ref.goto(refPath);
+  // 1. players: type to search; ineligible players are listed but blocked, with the reason
+  await ref.getByTestId("player-AAA-0").fill("a");
+  await expect(ref.getByRole("option", { name: /Arun Kid/ })).toBeVisible(); // typing "a" lists every matching player
+  await expect(ref.getByRole("option", { name: /Abe Adult/ })).toHaveAttribute("aria-disabled", "true");
+  await expect(ref.getByRole("option", { name: /Abe Adult/ })).toContainText("Over 17 on cutoff date");
+  await ref.getByRole("option", { name: /Arun Kid/ }).click();
+  await ref.getByTestId("player-AAA-1").fill("abe");
+  await expect(ref.getByRole("option", { name: /Abe Adult/ })).toContainText("Mixed needs 1M + 1F");
+  await pickPlayer(ref, "player-AAA-1", "asha", /Asha Kid/);
+  await pickPlayer(ref, "player-BBB-0", "ben", /Ben Kid/);
+  await pickPlayer(ref, "player-BBB-1", "bea", /Bea Kid/);
+  // 2. who serves first  3. court (sides/positions keep their defaults)
+  await expect(ref.getByTestId("start-match")).toBeDisabled();
+  await ref.getByTestId("serve-A").click();
   await ref.getByTestId("court-select").selectOption("Court 2");
-  await ref.getByRole("button", { name: /Confirm & lock lineups/ }).click();
-  await ref.getByRole("button", { name: /AAA/ }).first().click(); // toss winner
-  await ref.getByRole("button", { name: "Serve", exact: true }).click();
-  await ref.getByRole("button", { name: "Next" }).click();
-  await ref.getByRole("button", { name: "Next" }).click(); // sides
-  await ref.getByRole("button", { name: "Next" }).click(); // positions
-  await ref.getByRole("button", { name: "START MATCH" }).click();
+  await ref.getByTestId("start-match").click();
   await expect(call(ref)).toHaveText("0-0-2");
 
   // Game 1: AAA serves and wins 11-0
@@ -189,9 +184,8 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
   // ---------- one team, one tie at a time ----------
   // While AAA v BBB is in progress, a second tie involving these teams can't start a match.
   {
-    const tid0 = base.split("/admin/t/")[1];
-    const stages = (await (await page.request.get(`/api/admin/tournaments/${tid0}`)).json()).stages;
-    const extra = await (await page.request.post(`/api/admin/tournaments/${tid0}/ties`, { data: { stageId: stages[0].id, teamAId: tie.tie.teamAId, teamBId: tie.tie.teamBId, roundLabel: "Extra" } })).json();
+    const stages = (await (await page.request.get(`/api/admin/tournaments/${tournamentId}`)).json()).stages;
+    const extra = await (await page.request.post(`/api/admin/tournaments/${tournamentId}/ties`, { data: { stageId: stages[0].id, teamAId: theTie.teamAId, teamBId: theTie.teamBId, roundLabel: "Extra" } })).json();
     const extraTie = await (await page.request.get(`/api/admin/ties/${extra.id}`)).json();
     const m0 = extraTie.tie.matches[0];
     const r = await page.request.post(`/api/admin/matches/${m0.id}/events`, {
@@ -199,15 +193,17 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
     });
     expect(r.status()).toBe(409);
     expect((await r.json()).error).toMatch(/is still playing .*vs .*Finish that tie/);
-    await page.goto(`${base}/ties/${extra.id}`);
-    await expect(page.getByTestId("busy-warning")).toBeVisible();
+    // the referee sees it up front and can't press START
+    const busyRef = (await (await page.request.get(`/api/admin/matches/${m0.id}`)).json()).refPath;
+    const bp = await phone.newPage();
+    await bp.goto(busyRef);
+    await expect(bp.getByTestId("busy-warning")).toBeVisible();
+    await expect(bp.getByTestId("start-match")).toBeDisabled();
+    await bp.close();
     await page.request.delete(`/api/admin/ties/${extra.id}`);
-    await page.goto(`${base}/ties/${tieId}`);
   }
 
   // ---------- a referee with the SHARED referee login scores the MD match (1 game to 11) ----------
-  const panel2 = page.getByTestId("match-panel-2");
-  await expect(panel2.getByRole("radiogroup", { name: "Games" }).getByRole("radio", { name: "1", exact: true })).toHaveAttribute("aria-checked", "true");
   const phone2 = await browser.newContext({ ...devices["Pixel 7"] });
   const r2 = await phone2.newPage();
   await r2.goto("/ref");
@@ -216,29 +212,22 @@ test("match day: setup → lineups → ref scoring → live public updates", asy
   await r2.getByRole("button", { name: "Sign in" }).click();
   await expect(r2.getByTestId("ref-team-a")).toBeVisible(); // console loaded after sign-in
   const tSel = r2.getByLabel("Tournament");
-  const tournamentId = base.split("/admin/t/")[1];
   if (await tSel.isVisible().catch(() => false)) await tSel.selectOption(tournamentId); // by id: names can repeat
   await r2.getByTestId("ref-team-a").selectOption({ label: "Alpha Aces" });
   await r2.getByTestId("ref-team-b").selectOption({ label: "Bravo Blasters" });
-  await r2.getByTestId("ref-cat-MD").click();
+  // order: teams → court → category (nothing prefilled)
   await r2.getByTestId("ref-court").selectOption("Court 3");
+  await r2.getByTestId("ref-cat-MD").click();
   await r2.getByTestId("ref-continue").click();
   await expect(r2).toHaveURL(/\/ref\/[^?]+$/); // no token: signed-in referee
-  // players from dropdowns (whole roster listed; ineligible ones disabled)
-  await r2.getByTestId("lineup-AAA-0").selectOption({ label: "Abe Adult (M, 35+)" });
-  await r2.getByTestId("lineup-AAA-1").selectOption({ label: "Arun Kid (M, U18)" });
-  await r2.getByRole("region", { name: "Alpha Aces lineup" }).getByRole("button", { name: "Submit lineup" }).click();
-  await expect(r2.getByRole("region", { name: "Alpha Aces lineup" }).getByText("Abe Adult & Arun Kid")).toBeVisible();
-  await r2.getByTestId("lineup-BBB-0").selectOption({ label: "Ben Kid (M, U18)" });
-  await r2.getByTestId("lineup-BBB-1").selectOption({ label: "Bob Adult (M, 35+)" });
-  await r2.getByRole("region", { name: "Bravo Blasters lineup" }).getByRole("button", { name: "Submit lineup" }).click();
-  await r2.getByRole("button", { name: /Confirm & lock lineups/ }).click();
-  await r2.getByRole("button", { name: /AAA/ }).first().click();
-  await r2.getByRole("button", { name: "Serve", exact: true }).click();
-  await r2.getByRole("button", { name: "Next" }).click();
-  await r2.getByRole("button", { name: "Next" }).click();
-  await r2.getByRole("button", { name: "Next" }).click();
-  await r2.getByRole("button", { name: "START MATCH" }).click();
+  await expect(r2.getByText(/1 game to 11/)).toBeVisible(); // default format
+  await expect(r2.getByTestId("court-chosen")).toHaveText("Court 3");
+  await pickPlayer(r2, "player-AAA-0", "abe", /Abe Adult/);
+  await pickPlayer(r2, "player-AAA-1", "arun", /Arun Kid/);
+  await pickPlayer(r2, "player-BBB-0", "ben", /Ben Kid/);
+  await pickPlayer(r2, "player-BBB-1", "bob", /Bob Adult/);
+  await r2.getByTestId("serve-A").click();
+  await r2.getByTestId("start-match").click();
   await expect(call(r2)).toHaveText("0-0-2");
   await rally(r2, "A", 11);
   await expect(r2.getByRole("heading", { name: /Alpha Aces win/ })).toBeVisible();

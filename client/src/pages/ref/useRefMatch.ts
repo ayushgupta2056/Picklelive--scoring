@@ -49,6 +49,7 @@ export function useRefMatch(matchId: string, token: string) {
   const load = useCallback(async () => {
     try {
       const b = await api.get<RefBundle>(`/api/ref/${matchId}`, headers);
+      bundleRef.current = b; // so a send() right after load() uses the fresh seq
       setBundle(b);
       setLoadError(null);
       setNetOk(true);

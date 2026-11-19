@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { AlertTriangle, CalendarClock, Printer, Wand2 } from "lucide-react";
@@ -118,7 +117,7 @@ function Cell({ id, children, as = "td", className }: { id: string; children: Re
 }
 
 function MatchCard({ m, dim, conflict }: { m: MatchSummary; dim: boolean; conflict: boolean }) {
-  const { lk, tid } = useA();
+  const { lk } = useA();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: m.id, disabled: ["LIVE", "FINISHED", "WALKOVER", "RETIRED"].includes(m.status) });
   const tie = lk.ties.get(m.tieId)!;
   return (
@@ -128,7 +127,6 @@ function MatchCard({ m, dim, conflict }: { m: MatchSummary; dim: boolean; confli
       <TeamChip team={lk.teams.get(tie.teamAId ?? "")} size="sm" className="h-5 min-w-8 text-[10px]" />
       <TeamChip team={lk.teams.get(tie.teamBId ?? "")} size="sm" className="h-5 min-w-8 text-[10px]" />
       {conflict && <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500" />}
-      <Link to={`/admin/t/${tid}/ties/${tie.id}`} className="ml-auto text-[10px] text-muted-foreground hover:underline" onPointerDown={(e) => e.stopPropagation()}>open</Link>
     </div>
   );
 }

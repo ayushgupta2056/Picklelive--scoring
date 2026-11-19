@@ -4,8 +4,18 @@ import { test, expect } from "@playwright/test";
 test("TV dock selects one team / one tie and never goes blank", async ({ page, request }) => {
   const list = await (await request.get("/api/public/tournaments")).json();
   test.skip(!list.length, "needs a seeded tournament (npm run db:seed)");
-  const slug = list[0].slug as string;
-  const b = await (await request.get(`/api/public/t/${slug}`)).json();
+  // a tournament that has teams and ties (other test files may be creating a fresh, empty one)
+  let slug = "";
+  let b: any = null;
+  for (const t of [...list].sort((x: { slug: string }) => (x.slug === "demo-cup" ? -1 : 1))) {
+    const bundle = await (await request.get(`/api/public/t/${t.slug}`)).json();
+    if (bundle.teams?.length >= 2 && bundle.ties?.some((x: { teamAId: string | null }) => x.teamAId)) {
+      slug = t.slug;
+      b = bundle;
+      break;
+    }
+  }
+  test.skip(!b, "needs a seeded tournament with ties");
   const team = b.teams[0];
   const tie = b.ties.find((t: { teamAId: string | null; teamBId: string | null }) => t.teamAId && t.teamBId);
 

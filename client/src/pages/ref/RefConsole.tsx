@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/label";
 import { Input, NativeSelect } from "@/components/ui/input";
-import { CategoryBadge, StatusPill, TeamChip } from "@/components/match/bits";
+import { CategoryBadge, StatusPill } from "@/components/match/bits";
 import { Logo } from "@/components/Logo";
 import { useBundle, useLookups } from "@/hooks/useBundle";
 import { api, errorMessage } from "@/lib/api";
@@ -74,48 +74,41 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
   const list = useQuery({ queryKey: ["tournaments"], queryFn: () => api.get<TRow[]>("/api/public/tournaments") });
   const [chosenT, setChosenT] = useState(params.get("t") ?? "");
   const tid = chosenT && list.data?.some((t) => t.id === chosenT) ? chosenT : list.data?.[0]?.id ?? "";
-  const slug = list.data?.find((t) => t.id === tid)?.slug ?? list.data?.[0]?.slug;
+  const slug = list.data?.find((t) => t.id === tid)?.slug;
   const q = useBundle(slug);
   const lk = useLookups(q.data);
   const b = q.data;
 
-  const [teamA, setTeamA] = useState(params.get("a") ?? "");
-  const [teamB, setTeamB] = useState(params.get("b") ?? "");
+  // Nothing is prefilled: the referee picks teams → court → category, every time.
+  const [teamA, setTeamA] = useState("");
+  const [teamB, setTeamB] = useState("");
+  const [court, setCourt] = useState("");
   const [tieId, setTieId] = useState<string | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
-  const [court, setCourt] = useState("");
   const [working, setWorking] = useState(false);
 
-  // remember the pair in the URL so "Choose another match" brings the referee back here
   useEffect(() => {
-    const next = new URLSearchParams();
-    if (tid) next.set("t", tid);
-    if (teamA) next.set("a", teamA);
-    else next.delete("a");
-    if (teamB) next.set("b", teamB);
-    else next.delete("b");
-    if (next.toString() !== params.toString()) setParams(next, { replace: true });
-  }, [tid, teamA, teamB, params, setParams]);
+    if (tid && params.get("t") !== tid) setParams(new URLSearchParams({ t: tid }), { replace: true });
+  }, [tid, params, setParams]);
 
   const ties = useMemo<TieSummary[]>(() => {
     if (!b || !teamA || !teamB) return [];
     return b.ties.filter((t) => (t.teamAId === teamA && t.teamBId === teamB) || (t.teamAId === teamB && t.teamBId === teamA));
   }, [b, teamA, teamB]);
   useEffect(() => {
-    // auto-pick: the only tie, else the one in progress, else the next scheduled
     const pick = ties.length === 1 ? ties[0] : ties.find((t) => t.status === "IN_PROGRESS" || t.status === "DECIDED") ?? ties.find((t) => t.status === "SCHEDULED");
     setTieId(pick?.id ?? null);
     setMatchId(null);
   }, [ties]);
   const tie = ties.find((t) => t.id === tieId);
+  const match = tie?.matches.find((m) => m.id === matchId);
   // one team, one tie at a time
   const busy = useMemo(() => (b && tie ? busyConflicts(b.ties, tie.id) : []), [b, tie]);
   const blocked = busy.length > 0;
-  const match = tie?.matches.find((m) => m.id === matchId);
-  useEffect(() => setCourt(match?.court ?? ""), [match?.id, match?.court]);
 
   if (!b) return <div className="grid min-h-dvh place-items-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   const team = (id: string | null | undefined) => lk.teams.get(id ?? "");
+  const resuming = match && (match.status === "LIVE" || match.status === "PAUSED");
 
   const go = async () => {
     if (!match) return;
@@ -131,7 +124,7 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
   };
 
   return (
-    <div className="mx-auto min-h-dvh max-w-xl pb-28">
+    <div className="mx-auto min-h-dvh max-w-xl pb-32">
       <header className="sticky top-0 z-20 flex items-center gap-3 border-b bg-background/90 px-4 py-3 backdrop-blur">
         <Whistle className="h-6 w-6 text-lime-accent" />
         <div className="min-w-0 flex-1">
@@ -143,85 +136,77 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
         )}
       </header>
 
-      <div className="space-y-5 p-4">
+      <div className="space-y-6 p-4">
         {(list.data?.length ?? 0) > 1 && (
           <Field label="Tournament">
-            <NativeSelect value={tid} onChange={(e) => { setChosenT(e.target.value); setTeamA(""); setTeamB(""); }} className="h-14 text-base">
+            <NativeSelect value={tid} onChange={(e) => { setChosenT(e.target.value); setTeamA(""); setTeamB(""); setCourt(""); }} className="h-14 text-base">
               {list.data!.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </NativeSelect>
           </Field>
         )}
 
-        <Step n={1} title="Teams">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
-            <Field label="Team A">
-              <NativeSelect value={teamA} onChange={(e) => setTeamA(e.target.value)} className="h-14 text-base" data-testid="ref-team-a">
-                <option value="">Select…</option>
-                {b.teams.map((t) => <option key={t.id} value={t.id} disabled={t.id === teamB}>{t.name}</option>)}
-              </NativeSelect>
-            </Field>
-            <span className="pb-4 font-display text-lg font-bold text-muted-foreground">VS</span>
-            <Field label="Team B">
-              <NativeSelect value={teamB} onChange={(e) => setTeamB(e.target.value)} className="h-14 text-base" data-testid="ref-team-b">
-                <option value="">Select…</option>
-                {b.teams.map((t) => <option key={t.id} value={t.id} disabled={t.id === teamA}>{t.name}</option>)}
-              </NativeSelect>
-            </Field>
+        <Step n={1} title="Which two teams are playing?">
+          <div className="grid gap-2">
+            <NativeSelect value={teamA} onChange={(e) => setTeamA(e.target.value)} className="h-14 text-base" data-testid="ref-team-a" aria-label="First team">
+              <option value="">First team…</option>
+              {b.teams.map((t) => <option key={t.id} value={t.id} disabled={t.id === teamB}>{t.name}</option>)}
+            </NativeSelect>
+            <span className="text-center font-display text-lg font-bold text-muted-foreground">VS</span>
+            <NativeSelect value={teamB} onChange={(e) => setTeamB(e.target.value)} className="h-14 text-base" data-testid="ref-team-b" aria-label="Second team">
+              <option value="">Second team…</option>
+              {b.teams.map((t) => <option key={t.id} value={t.id} disabled={t.id === teamA}>{t.name}</option>)}
+            </NativeSelect>
           </div>
+          {teamA && teamB && ties.length === 0 && (
+            <div className="mt-3 rounded-xl border border-dashed p-4 text-sm">
+              <p className="mb-3 text-muted-foreground">These two teams don't have a tie in the schedule.</p>
+              <Button variant="outline" disabled={working} onClick={async () => {
+                setWorking(true);
+                try {
+                  await api.post("/api/ref-session/ties", { tournamentId: b.tournament.id, teamAId: teamA, teamBId: teamB });
+                  await qc.invalidateQueries({ queryKey: ["bundle", slug] });
+                  toast.success("Extra tie created");
+                } catch (e) {
+                  toast.error(errorMessage(e));
+                } finally {
+                  setWorking(false);
+                }
+              }}><Plus /> Start an extra tie</Button>
+            </div>
+          )}
+          {ties.length > 1 && (
+            <div className="mt-3 grid gap-2">
+              <p className="text-sm text-muted-foreground">These teams meet more than once. Which one?</p>
+              {ties.map((t) => (
+                <button key={t.id} type="button" onClick={() => { setTieId(t.id); setMatchId(null); }} aria-pressed={t.id === tieId}
+                  className={cn("flex min-h-14 items-center gap-3 rounded-xl border p-3 text-left", t.id === tieId ? "border-lime bg-lime/10" : "hover:bg-accent")}>
+                  <span className="min-w-0 flex-1 truncate font-semibold">{t.roundLabel}</span>
+                  <span className="score-display text-xl">{t.scoreA}–{t.scoreB}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {tie && busy.length > 0 && (
+            <div role="alert" className="mt-3 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm font-semibold text-amber-600 dark:text-amber-300" data-testid="busy-warning">
+              {busyMessage(busy, (id) => team(id)?.name ?? "A team")}
+            </div>
+          )}
         </Step>
 
-        {teamA && teamB && (
-          <Step n={2} title="Tie">
-            {ties.length === 0 ? (
-              <div className="rounded-xl border border-dashed p-4 text-sm">
-                <p className="mb-3 text-muted-foreground">There's no tie between {team(teamA)?.name} and {team(teamB)?.name} in the schedule.</p>
-                <Button variant="outline" disabled={working} onClick={async () => {
-                  setWorking(true);
-                  try {
-                    await api.post("/api/ref-session/ties", { tournamentId: b.tournament.id, teamAId: teamA, teamBId: teamB });
-                    await qc.invalidateQueries({ queryKey: ["bundle", slug] });
-                    toast.success("Extra tie created");
-                  } catch (e) {
-                    toast.error(errorMessage(e));
-                  } finally {
-                    setWorking(false);
-                  }
-                }}><Plus /> Start an extra tie</Button>
-              </div>
-            ) : (
-              <div className="grid gap-2">
-                {ties.map((t) => (
-                  <button key={t.id} type="button" onClick={() => { setTieId(t.id); setMatchId(null); }} aria-pressed={t.id === tieId}
-                    className={cn("flex min-h-16 items-center gap-3 rounded-xl border p-3 text-left transition-colors", t.id === tieId ? "border-lime bg-lime/10" : "hover:bg-accent")}>
-                    <TeamChip team={team(t.teamAId)} /> <span className="score-display text-2xl">{t.scoreA}–{t.scoreB}</span> <TeamChip team={team(t.teamBId)} />
-                    <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{t.roundLabel}</span>
-                    <span className="text-xs font-bold uppercase text-muted-foreground">{t.status.replace("_", " ").toLowerCase()}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </Step>
-        )}
-
-        {tie && busy.length > 0 && (
-          <div role="alert" className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm font-semibold text-amber-600 dark:text-amber-300" data-testid="busy-warning">
-            {busyMessage(busy, (id) => team(id)?.name ?? "A team")}
-          </div>
-        )}
         {tie && (
-          <Step n={3} title="Category">
-            <div className="grid gap-2" role="listbox" aria-label="Category matches">
-              {tie.matches.map((m) => <MatchOption key={m.id} m={m} selected={m.id === matchId} onSelect={() => setMatchId(m.id)} lk={lk} />)}
-            </div>
-          </Step>
-        )}
-
-        {match && (
-          <Step n={4} title="Court">
-            <NativeSelect value={court} onChange={(e) => setCourt(e.target.value)} className="h-14 text-base" data-testid="ref-court">
+          <Step n={2} title="Which court?">
+            <NativeSelect value={court} onChange={(e) => setCourt(e.target.value)} className="h-14 text-base" data-testid="ref-court" aria-label="Court">
               <option value="">Select court…</option>
               {b.tournament.courtNames.map((c) => <option key={c} value={c}>{c}</option>)}
             </NativeSelect>
+          </Step>
+        )}
+
+        {tie && court && (
+          <Step n={3} title="Which category?">
+            <div className="grid gap-2" role="listbox" aria-label="Category matches">
+              {tie.matches.map((m) => <MatchOption key={m.id} m={m} selected={m.id === matchId} onSelect={() => setMatchId(m.id)} lk={lk} />)}
+            </div>
           </Step>
         )}
       </div>
@@ -229,12 +214,11 @@ function Chooser({ who, isRef }: { who: string; isRef: boolean }) {
       {match && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
           <div className="mx-auto max-w-xl">
-            <Button size="lg" className="h-16 w-full text-lg font-black" disabled={working || !court || (blocked && match.seq === 0)} onClick={go} data-testid="ref-continue">
+            <Button size="lg" className="h-16 w-full text-lg font-black" disabled={working || (blocked && !resuming)} onClick={go} data-testid="ref-continue">
               {working && <Loader2 className="animate-spin" />}
-              {match.status === "LIVE" || match.status === "PAUSED" ? "Resume scoring" : "Continue: players, toss & scoring"} <ChevronRight />
+              {resuming ? "Resume scoring" : "Next: choose players"} <ChevronRight />
             </Button>
-            {!court && <p className="mt-1 text-center text-xs text-muted-foreground">Pick the court first.</p>}
-            {court && blocked && match.seq === 0 && <p className="mt-1 text-center text-xs text-amber-500">One of these teams is still playing another tie.</p>}
+            {blocked && !resuming && <p className="mt-1 text-center text-xs text-amber-500">One of these teams is still playing another tie.</p>}
           </div>
         </div>
       )}
@@ -263,7 +247,7 @@ function MatchOption({ m, selected, onSelect, lk }: { m: MatchSummary; selected:
       <CategoryBadge category={cat} />
       <span className="min-w-0 flex-1">
         <span className="block truncate font-semibold">{cat?.name}{m.isDecider ? " · decider" : ""}</span>
-        <span className="block text-xs text-muted-foreground">{m.court ?? "No court yet"} · {m.bestOf === 1 ? "1 game" : `best of ${m.bestOf}`} to {m.pointsToWin}{done && m.games.length ? ` · ${m.games.map((g) => `${g.a}-${g.b}`).join(" ")}` : ""}</span>
+        <span className="block text-xs text-muted-foreground">{m.bestOf === 1 ? "1 game" : `best of ${m.bestOf}`} to {m.pointsToWin}{done && m.games.length ? ` · ${m.games.map((g) => `${g.a}-${g.b}`).join(" ")}` : ""}</span>
       </span>
       <StatusPill status={m.status} />
     </button>
